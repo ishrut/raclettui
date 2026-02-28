@@ -18,6 +18,7 @@ use crate::{
 
 // holds wayland states
 pub struct WgpuWaylandState {
+    // surface creation objects
     layer: zwlr_layer_shell_v1::Layer,
     namespace: String,
     anchors: Vec<zwlr_layer_surface_v1::Anchor>,
@@ -39,6 +40,7 @@ pub struct WgpuWaylandState {
     pub window_width: u32,
     pub window_height: u32,
 
+    // keyboard and mouse events related objects
     seat: Option<wl_seat::WlSeat>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
@@ -50,9 +52,6 @@ pub struct WgpuWaylandState {
 
 impl WgpuWaylandState {
     pub fn new(builder: &WindowBuilder) -> Self {
-        let window_width = builder.width;
-        let window_height = builder.height;
-
         Self {
             anchors: builder.anchors.clone(),
             keyboard_interactivity: builder.keyboard_interactivity.clone(),
@@ -68,8 +67,8 @@ impl WgpuWaylandState {
             surface_configured: false,
             frame_callback: None,
             needs_redraw: true,
-            window_width,
-            window_height,
+            window_width: builder.width,
+            window_height: builder.height,
             seat: None,
             keyboard: None,
             pointer: None,
@@ -124,10 +123,13 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WgpuWaylandState {
                 "zwlr_layer_shell_v1" => {
                     let layer_shell =
                         registry.bind::<ZwlrLayerShellV1, _, _>(name, version, qh, ());
-                    state.layer_shell = Some(layer_shell.clone());
 
-                    let surface = state.surface.as_ref().unwrap();
+                    let surface = match &state.surface {
+                        Some(surface) => surface,
+                        None => panic!("src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface")
+                    };
 
+                    // configuring layer shell surface
                     let layer_surface = layer_shell.get_layer_surface(
                         surface,
                         None,
@@ -153,6 +155,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WgpuWaylandState {
                         layer_surface.set_exclusive_edge(edge);
                     }
 
+                    state.layer_shell = Some(layer_shell);
                     state.layer_surface = Some(layer_surface);
                     // initial commit without buffer attached
                     surface.commit();
@@ -246,12 +249,16 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WgpuWaylandState {
         match event {
             wl_keyboard::Event::Key { key, state, .. } => {
                 if let WEnum::Value(key_state) = state {
-                    let window_event = WindowEvent::new_keyboard_event(
-                        own_state.keymap_state.as_ref().unwrap(),
-                        key,
-                        key_state as u32,
-                    );
-                    own_state.events.push(window_event);
+                    if let Some(keymap_state) = &own_state.keymap_state {
+                        let window_event = WindowEvent::new_keyboard_event(
+                            keymap_state,
+                            key,
+                            key_state as u32,
+                        );
+                        own_state.events.push(window_event);
+                    } else {
+                        eprintln!("src/wgpu/wayland.rs keymap state not configured, cannot get get keyboard event")
+                    }
                 }
             }
             wl_keyboard::Event::Modifiers {
