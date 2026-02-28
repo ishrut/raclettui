@@ -86,7 +86,7 @@ Here is a minimal example:
 ```
 
 ## Demo
-<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/raclettuilogo.png" width="500"></a>
+<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/demo.png" width="500"></a>
 
 ## Documentation
 
