@@ -4,10 +4,6 @@
 
 <div align="center">
 
-[![Repo]()]()
-[![Crate]()]()
-[![Docs]()]()
-
 </div>
 
 # Raclettui
@@ -90,6 +86,7 @@ Here is a minimal example:
 ```
 
 ## Demo
+<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/raclettuilogo.png" width="500"></a>
 
 ## Documentation
 
