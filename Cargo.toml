@@ -2,6 +2,15 @@
 name = "raclettui"
 version = "0.1.0"
 edition = "2024"
+description = "Build terminal-themed wayland layer shell applications with Rust."
+license = "MIT"
+repository = "https://github.com/ishrut/raclettui"
+homepage = "https://github.com/ishrut/raclettui"
+documentation = "https://docs.rs/raclettui"
+readme = "README.md"
+keywords = ["layershell", "ratatui", "wayland", "tui", "gui"]
+categories = ["graphics", "rendering", "gui"]
+authors = ["Ishrut"]
 
 [dependencies]
 ab_glyph = "0.2.32"
