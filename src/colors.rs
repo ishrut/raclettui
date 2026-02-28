@@ -1,0 +1,114 @@
+use ratatui_core::style::Color;
+
+pub fn rgba_premultiplied(color: (u8, u8, u8, u8), alpha: f32) -> (u8, u8, u8, u8) {
+    let r = (color.0 as f32 * alpha) as u8;
+    let g = (color.1 as f32 * alpha) as u8;
+    let b = (color.2 as f32 * alpha) as u8;
+    let a = (255. as f32 * alpha) as u8;
+    (r, g, b, a)
+}
+
+pub fn to_rgba(color: Color, fallback: (u8, u8, u8), alpha: f32) -> (u8, u8, u8, u8) {
+    let a = (alpha.clamp(0.0, 1.0) * 255.0).round() as u8;
+    match color {
+        Color::Rgb(r, g, b) => (r, g, b, a),
+        Color::Black => (0, 0, 0, a),
+        Color::Red => (128, 0, 0, a),
+        Color::Green => (0, 128, 0, a),
+        Color::Yellow => (128, 128, 0, a),
+        Color::Blue => (0, 0, 128, a),
+        Color::Magenta => (128, 0, 128, a),
+        Color::Cyan => (0, 128, 128, a),
+        Color::Gray => (192, 192, 192, a),
+        Color::DarkGray => (128, 128, 128, a),
+        Color::LightRed => (255, 0, 0, a),
+        Color::LightGreen => (0, 255, 0, a),
+        Color::LightYellow => (255, 255, 0, a),
+        Color::LightBlue => (0, 0, 255, a),
+        Color::LightMagenta =>(255, 0, 255, a),
+        Color::LightCyan => (0, 255, 255, a),
+        Color::White => (255, 255, 255, a),
+        Color::Indexed(code) => {
+            let hex = indexed_color_to_rgb(code).to_ne_bytes();
+            (hex[2], hex[1], hex[0], a)
+        },
+        Color::Reset => (fallback.0, fallback.1, fallback.2, a),
+    }
+}
+
+/// Converts an indexed color (0-255) to an RGB value.
+fn indexed_color_to_rgb(index: u8) -> u32 {
+    match index {
+        // Basic 16 colors (0-15)
+        0..=15 => {
+            const BASIC_COLORS: [u32; 16] = [
+                0x000000, // 0: black
+                0xCD0000, // 1: red
+                0x00CD00, // 2: green
+                0xCDCD00, // 3: yellow
+                0x0000EE, // 4: blue
+                0xCD00CD, // 5: magenta
+                0x00CDCD, // 6: cyan
+                0xE5E5E5, // 7: white
+                0x7F7F7F, // 8: bright Black
+                0xFF0000, // 9: bright Red
+                0x00FF00, // 10: bright Green
+                0xFFFF00, // 11: bright Yellow
+                0x5C5CFF, // 12: bright Blue
+                0xFF00FF, // 13: bright Magenta
+                0x00FFFF, // 14: bright Cyan
+                0xFFFFFF, // 15: bright White
+            ];
+            BASIC_COLORS[index as usize]
+        }
+
+        // 216-color cube (16-231)
+        16..=231 => {
+            let cube_index = index - 16;
+            let r = cube_index / 36;
+            let g = (cube_index % 36) / 6;
+            let b = cube_index % 6;
+
+            // Convert 0-5 range to 0-255 RGB
+            // Values: 0 -> 0, 1 -> 95, 2 -> 135, 3 -> 175, 4 -> 215, 5 -> 255
+            let to_rgb = |n: u8| -> u32 {
+                if n == 0 {
+                    0
+                } else {
+                    55 + 40 * n as u32
+                }
+            };
+
+            to_rgb(r) << 16 | to_rgb(g) << 8 | to_rgb(b)
+        }
+
+        // 24 grayscale colors (232-255)
+        232..=255 => {
+            let gray_index = index - 232;
+            // linear interpolation from 8 to 238
+            let gray = (8 + gray_index * 10) as u32;
+            (gray << 16) | (gray << 8) | gray
+        }
+    }
+}
+
+
+pub fn linear_color(color: (u8, u8, u8), alpha: f32) -> [f32; 4] {
+    let (r, g, b) = color_to_linear(color);
+    [r as f32, g as f32, b as f32, alpha]
+}
+fn color_to_linear(color: (u8, u8, u8)) -> (f64, f64, f64) {
+    (
+        srgb_to_linear(color.0),
+        srgb_to_linear(color.1),
+        srgb_to_linear(color.2),
+    )
+}
+fn srgb_to_linear(value: u8) -> f64 {
+    let v = value as f64 / 255.0;
+    if v <= 0.04045 {
+        v / 12.92
+    } else {
+        ((v + 0.055) / 1.055).powf(2.4)
+    }
+}
