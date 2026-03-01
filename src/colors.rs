@@ -1,5 +1,71 @@
 use ratatui_core::style::Color;
 
+pub struct RaclettuiColor(u8, u8, u8, u8);
+
+impl RaclettuiColor {
+    pub fn from_rgba(r: u8, g: u8, b: u8, a: u8) -> Self {
+        Self(r, g, b, a)
+    }
+
+    pub fn from_rgb(r: u8, g: u8, b: u8) -> Self {
+        Self(r, g, b, 255)
+    }
+    pub fn set_alpha(&mut self, alpha: f32) {
+        let a = (alpha * 255.).floor() as u8;
+        self.3 = a;
+    }
+
+    pub fn to_linear(&self) -> [f32; 4] {
+        let r_linear = Self::linearise(self.0) as f32;
+        let g_linear = Self::linearise(self.1) as f32;
+        let b_linear = Self::linearise(self.2) as f32;
+        let a_linear = self.3 as f32 / 255.;
+        [r_linear, g_linear, b_linear, a_linear]
+    }
+
+    fn linearise(value: u8) -> f64 {
+        let v = value as f64 / 255.0;
+        if v <= 0.04045 {
+            v / 12.92
+        } else {
+            ((v + 0.055) / 1.055).powf(2.4)
+        }
+    }
+}
+
+impl std::convert::From<ratatui_core::style::Color> for RaclettuiColor {
+    fn from(value: ratatui_core::style::Color) -> Self {
+        let a = 255;
+
+        match value {
+            Color::Rgb(r, g, b) => Self(r, g, b, a),
+            Color::Black => Self(0, 0, 0, a),
+            Color::Red => Self(128, 0, 0, a),
+            Color::Green => Self(0, 128, 0, a),
+            Color::Yellow => Self(128, 128, 0, a),
+            Color::Blue => Self(0, 0, 128, a),
+            Color::Magenta => Self(128, 0, 128, a),
+            Color::Cyan => Self(0, 128, 128, a),
+            Color::Gray => Self(192, 192, 192, a),
+            Color::DarkGray => Self(128, 128, 128, a),
+            Color::LightRed => Self(255, 0, 0, a),
+            Color::LightGreen => Self(0, 255, 0, a),
+            Color::LightYellow => Self(255, 255, 0, a),
+            Color::LightBlue => Self(0, 0, 255, a),
+            Color::LightMagenta => Self(255, 0, 255, a),
+            Color::LightCyan => Self(0, 255, 255, a),
+            Color::White => Self(255, 255, 255, a),
+            Color::Indexed(code) => {
+                let hex = indexed_color_to_rgb(code).to_ne_bytes();
+                Self(hex[2], hex[1], hex[0], a)
+            },
+            Color::Reset => Self(255, 255, 255, a),
+        }
+    }
+
+}
+
+// used mainly by cpu backend, wonder what would happen if i do not premultiply, to try out
 pub fn rgba_premultiplied(color: (u8, u8, u8, u8), alpha: f32) -> (u8, u8, u8, u8) {
     let r = (color.0 as f32 * alpha) as u8;
     let g = (color.1 as f32 * alpha) as u8;

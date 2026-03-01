@@ -86,7 +86,10 @@ Here is a minimal example:
 ```
 
 ## Demo
-<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/demo.png" width="500"></a>
+Converting the bluetui app interface in to a layer shell window is as simple as switching the backend.
+However, converting the crossterm events to window events is still a work in progress.
+<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/bluetuidemo.png" width="500"></a>
+
 
 ## Documentation
 

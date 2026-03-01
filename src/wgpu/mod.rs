@@ -1,4 +1,4 @@
-mod window;
+pub mod window;
 mod wayland;
 mod backend;
 mod utils;

@@ -1,6 +1,6 @@
 mod builder;
 mod cpu;
-mod wgpu;
+pub mod wgpu;
 pub mod events;
 mod colors;
 mod error;

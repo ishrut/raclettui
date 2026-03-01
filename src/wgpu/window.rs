@@ -24,7 +24,7 @@ pub struct WgpuWindow {
     pub wayland_state: WgpuWaylandState,
     pub wayland_event_queue: EventQueue<WgpuWaylandState>,
 
-    pub bg_alpha: f32,
+    // pub bg_alpha: f32,
 }
 
 impl WindowBuilder {
@@ -51,8 +51,9 @@ impl WindowBuilder {
             .map_err(|e| Error::WaylandDispatchError(e))?;
 
 
+        // need to test out vulkan on backend, currently opengl works, needs khronos-egl static feature
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::GL,
+            backends: wgpu::Backends::default(),
             flags: wgpu::InstanceFlags::default(),
             memory_budget_thresholds: wgpu::MemoryBudgetThresholds::default(),
             backend_options: wgpu::BackendOptions::default(),
@@ -81,13 +82,13 @@ impl WindowBuilder {
         }
         .unwrap();
 
-        let adapter = utils::wgpu_create_adapter(&instance, &wgpu_surface);
-        let (wgpu_device, wgpu_queue) = utils::wgpu_get_device_queue(&adapter);
+        let adapter = utils::wgpu_create_adapter(&instance, &wgpu_surface)?;
+        let (wgpu_device, wgpu_queue) = utils::wgpu_get_device_queue(&adapter)?;
         let wgpu_config = utils::wgpu_get_surface_config(&wgpu_surface, &adapter, state.window_width, state.window_height);
         wgpu_surface.configure(&wgpu_device, &wgpu_config);
 
         // to obtain from window builder
-        let font = glyphon::FontSystem::new();
+        let font = self.get_font_system()?;
 
         let grid_renderer = GridRenderer::new(
             font,
@@ -106,21 +107,24 @@ impl WindowBuilder {
             wgpu_surface,
             wgpu_device,
             wgpu_queue,
-            bg_alpha: self.bg_alpha,
+            // bg_alpha: self.bg_alpha,
             grid_renderer,
         })
     }
 }
 
 impl WgpuWindow {
-    pub fn update(&mut self) {
+    pub fn update(&mut self) -> Result<(), Error> {
         self.wayland_event_queue
             .blocking_dispatch(&mut self.wayland_state)
-            .unwrap();
+            .map_err(|e| Error::WaylandDispatchError(e))?;
+        Ok(())
     }
 
-    pub fn clear_screen(&self) {
-        let output = self.wgpu_surface.get_current_texture().unwrap();
+    pub fn clear_screen(&self) -> Result<(), Error> {
+        let output = self.wgpu_surface
+            .get_current_texture()
+            .map_err(|e| Error::WgpuSurfaceError(e))?;
         let view = output.texture.create_view(&wgpu::TextureViewDescriptor::default());
         let mut encoder = self.wgpu_device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("Clear Screen Render Encoder"),
@@ -137,7 +141,7 @@ impl WgpuWindow {
                             r: 0.0,
                             g: 0.0,
                             b: 0.0,
-                            a: self.bg_alpha as f64,
+                            a: self.grid_renderer.grid.bg_alpha as f64,
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -150,6 +154,7 @@ impl WgpuWindow {
         }
         self.wgpu_queue.submit(std::iter::once(encoder.finish()));
         output.present();
+        Ok(())
     }
 
     pub fn get_event_queue(&self) -> WindowEventQueue {
@@ -163,6 +168,7 @@ impl WgpuWindow {
         self.wayland_state.window_height
     }
 
+    // for testing purposes function
     pub fn render(
         &mut self,
     ) {
@@ -184,7 +190,7 @@ impl WgpuWindow {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear({
-                            wgpu::Color { r: 0., g: 0., b: 0., a: self.bg_alpha as f64 }
+                            wgpu::Color { r: 0., g: 0., b: 0., a: self.grid_renderer.grid.bg_alpha as f64 }
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -203,6 +209,8 @@ impl WgpuWindow {
         output.present();
 
     }
+
+    // for testing purposes function
     pub fn redraw<F>(&mut self, mut render_callback: F)
     where
         F: FnMut(&wgpu::Surface, &wgpu::Device, &mut wgpu::Queue, &wgpu::SurfaceConfiguration),

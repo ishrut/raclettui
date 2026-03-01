@@ -1,6 +1,9 @@
 # 🚀 TODOs
 
-- [ ] Beautify wgpu glyph rendering
+- [X] Beautify wgpu glyph rendering
+- [ ] Force a font loading
+- [ ] Cleanup code base, all errors no panics handled and expose api
+- [ ] Grapheme cluster handling for backend
 - [ ] Ratatui backend handle cell data better with modifiers, skip, underline ...
 - [ ] Vulkan backend libraries in nix
 - [ ] Optimise background rendering using instances

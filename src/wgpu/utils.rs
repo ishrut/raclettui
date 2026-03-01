@@ -1,6 +1,7 @@
 use pollster::FutureExt as _;
+use crate::Error;
 
-pub fn wgpu_create_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> wgpu::Adapter {
+pub fn wgpu_create_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -> Result<wgpu::Adapter, Error> {
 
     let adapter = instance
         .request_adapter(&wgpu::RequestAdapterOptionsBase {
@@ -9,11 +10,11 @@ pub fn wgpu_create_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -
             compatible_surface: Some(&surface),
         })
         .block_on()
-        .unwrap();
-    adapter
+        .map_err(|e| Error::WgpuAdapterError(e))?;
+    Ok(adapter)
 }
 
-pub fn wgpu_get_device_queue(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Queue) {
+pub fn wgpu_get_device_queue(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, wgpu::Queue), Error> {
 
     let (wgpu_device, wgpu_queue) = adapter
         .request_device(&wgpu::DeviceDescriptor {
@@ -26,9 +27,9 @@ pub fn wgpu_get_device_queue(adapter: &wgpu::Adapter) -> (wgpu::Device, wgpu::Qu
             trace: wgpu::Trace::Off,
         })
         .block_on()
-        .unwrap();
+        .map_err(|e| Error::WgpuRequestDeviceError(e))?;
 
-    (wgpu_device, wgpu_queue)
+    Ok((wgpu_device, wgpu_queue))
 }
 
 // if window is resized new configuration is needed

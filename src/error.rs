@@ -8,6 +8,10 @@ pub enum Error {
     WaylandFrameCallbackError,
     RatatuiBackendError,
     WgpuWindowError,
+    FontLoadingError,
+    WgpuSurfaceError(wgpu::SurfaceError),
+    WgpuAdapterError(wgpu::RequestAdapterError),
+    WgpuRequestDeviceError(wgpu::RequestDeviceError),
 }
 
 impl std::error::Error for Error {}
@@ -22,6 +26,10 @@ impl std::fmt::Display for Error {
             Self::WaylandFrameCallbackError => write!(f, "unable to set wayland frame callback, surface dropped?"),
             Self::RatatuiBackendError => write!(f, "ratatui backend error"),
             Self::WgpuWindowError => write!(f, "error creating wgpu window"),
+            Self::FontLoadingError => write!(f, "unable to load font"),
+            Self::WgpuSurfaceError(e) => write!(f, "{}", e),
+            Self::WgpuAdapterError(e) => write!(f, "{}", e),
+            Self::WgpuRequestDeviceError(e) => write!(f, "{}", e),
         }
     }
 }

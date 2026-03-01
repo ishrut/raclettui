@@ -1,4 +1,4 @@
-use glyphon::FontSystem;
+use glyphon::{FontSystem, cosmic_text};
 use wgpu::util::DeviceExt;
 
 use crate::colors;
@@ -52,14 +52,14 @@ impl TerminalGrid {
         }
     }
 
-    // to add italics bolds ...
+    // to add italics bolds ... needs a way to force a font.
     pub fn set_ch(
         &mut self,
         row: u32,
         col: u32,
         ch: char,
         color: (u8, u8, u8),
-        font_system: &mut FontSystem
+        font_system: &mut FontSystem,
     )
     {
         if row >= self.rows || col >= self.cols {
@@ -72,7 +72,9 @@ impl TerminalGrid {
             font_system,
             ch.to_string().as_str(),
             &glyphon::Attrs::new()
-                .color(glyphon::Color::rgba(color.0, color.1, color.2, alpha)),
+                .color(glyphon::Color::rgba(color.0, color.1, color.2, alpha))
+                .family(glyphon::cosmic_text::Family::Monospace),
+                // .style(cosmic_text::Style::Italic)
             glyphon::Shaping::Advanced,
             None,
         );

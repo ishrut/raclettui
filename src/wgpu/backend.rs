@@ -11,7 +11,8 @@ impl ratatui_core::backend::Backend for WgpuWindow {
     {
 
         loop {
-            self.update();
+            // update is blocking
+            self.update()?;
             if self.wayland_state.is_redraw() {
                 break
             }
@@ -19,11 +20,16 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         self.wayland_state.needs_redraw = false;
 
         for (x, y, cell) in content {
-            let ch = cell.symbol().chars().next()
+            let ch = cell
+                .symbol()
+                .chars()
+                .next()
                 .ok_or(Error::RatatuiBackendError)?;
-            // println!("ch is: {}", ch);
-            let bg = colors::to_rgba(cell.bg, (0, 0, 0), self.bg_alpha);
-            let fg = colors::to_rgba(cell.fg,(255, 255, 255), self.bg_alpha);
+            let bg_alpha = self.grid_renderer.grid.bg_alpha;
+            let fg_alpha = self.grid_renderer.grid.bg_alpha;
+            // into functions for these colors
+            let bg = colors::to_rgba(cell.bg, (0, 0, 0), bg_alpha);
+            let fg = colors::to_rgba(cell.fg,(255, 255, 255), bg_alpha);
 
             self.grid_renderer.grid.set_bg(y as u32, x as u32, (bg.0, bg.1, bg.2));
             self.grid_renderer.grid.set_ch(
@@ -35,7 +41,8 @@ impl ratatui_core::backend::Backend for WgpuWindow {
             );
         }
 
-        let output = self.wgpu_surface.get_current_texture().unwrap();
+        let output = self.wgpu_surface.get_current_texture()
+            .map_err(|e| Error::WgpuSurfaceError(e))?;
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -52,7 +59,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear({
-                            wgpu::Color { r: 0., g: 0., b: 0., a: self.bg_alpha as f64 }
+                            wgpu::Color { r: 0., g: 0., b: 0., a: self.grid_renderer.grid.bg_alpha as f64 }
                         }),
                         store: wgpu::StoreOp::Store,
                     },
@@ -77,7 +84,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         Ok(())
     }
     fn clear(&mut self) -> Result<(), Self::Error> {
-        self.clear_screen();
+        self.clear_screen()?;
         Ok(())
     }
     fn clear_region(&mut self, clear_type: ratatui_core::backend::ClearType) -> Result<(), Self::Error> {
@@ -126,3 +133,4 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         Ok(())
     }
 }
+

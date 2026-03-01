@@ -15,7 +15,7 @@ fn main(){
     let window = WindowBuilder::new()
         .set_namespace("example")
         .set_width(300)
-        .set_height(300)
+        .set_height(900)
         .set_layer(Layer::Top)
         .set_anchor(Anchor::Top)
         .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)

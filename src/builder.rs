@@ -1,5 +1,6 @@
 use crate::layer::{Layer, Anchor};
 use crate::KeyboardInteractivity;
+use crate::Error;
 
 /// Builder for configuring and constructing a Wayland layer-shell window.
 ///
@@ -214,7 +215,7 @@ impl WindowBuilder {
         self
     }
 
-    // loads font from a path if provided or tries to default to system
+    // loads font from a path into fontdb if provided or tries to default to system
     pub fn get_font(&self) -> fontdue::Font {
         if let Some(path) = self.font_path {
             let bytes = std::fs::read(path)
@@ -231,21 +232,37 @@ impl WindowBuilder {
                 families: &[fontdb::Family::Monospace],
                 ..Default::default()
             };
-            let font_id = font_db.query(&query).expect("src/cpu/buffer.rs No monospace font found"); // Find a font that matches the query
+            let font_id = font_db
+                .query(&query)
+                .expect("src/builder.rs No monospace font found"); // Find a font that matches the query
             let font_data = font_db
                 .with_face_data(font_id, |data, _face_index| {
                     data.to_vec()
                 })
-                .expect("src/cpu/buffer.rs Failed to load font");
+                .expect("src/builder.rs Failed to load font");
 
             fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap()
         }
     }
 
-    pub fn get_font_system(&self) -> glyphon::FontSystem {
+    // kinda need to give option to force a font by path.
+    pub fn get_font_system(&self) -> Result<glyphon::FontSystem, Error> {
         if let Some(path) = self.font_path {
-            // let font_system = glyphon::FontSystem::new_with_fonts(path);
+            let path_buf = std::path::PathBuf::from(path);
+            let source = fontdb::Source::File(path_buf);
+            let font_system = glyphon::FontSystem::new_with_fonts(std::iter::once(source));
+            let db =  font_system.db();
+            let query = fontdb::Query {
+                families: &[fontdb::Family::Monospace],
+                ..Default::default()
+            };
+            let _font_id = db
+                .query(&query)
+                .ok_or(Error::FontLoadingError)?;
+            Ok(font_system)
+        } else {
+            let font_system = glyphon::FontSystem::new();
+            Ok(font_system)
         }
-        todo!()
     }
 }
