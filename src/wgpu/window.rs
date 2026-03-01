@@ -1,14 +1,15 @@
+use std::ffi::c_void;
+use wayland_client::{Connection, EventQueue, Proxy};
 use raw_window_handle::{
     RawDisplayHandle, RawWindowHandle, WaylandDisplayHandle, WaylandWindowHandle,
 };
-use std::ffi::c_void;
 
-use crate::WindowBuilder;
 use super::wayland::WgpuWaylandState;
-use super::utils;
-use crate::events::WindowEventQueue;
 use super::render::GridRenderer;
-use wayland_client::{Connection, EventQueue, Proxy};
+use super::utils;
+use crate::Error;
+use crate::WindowBuilder;
+use crate::events::WindowEventQueue;
 
 pub struct WgpuWindow {
 
@@ -27,8 +28,9 @@ pub struct WgpuWindow {
 }
 
 impl WindowBuilder {
-    pub fn init_wgpu(self) -> WgpuWindow {
-        let conn = Connection::connect_to_env().unwrap();
+    pub fn init_wgpu(self) -> Result<WgpuWindow, Error> {
+        let conn = Connection::connect_to_env()
+            .map_err(|e| Error::WaylandConnectError(e))?;
         let mut event_queue = conn.new_event_queue();
         let qh = event_queue.handle();
 
@@ -37,13 +39,16 @@ impl WindowBuilder {
 
         let mut state = WgpuWaylandState::new(&self);
 
-        event_queue.roundtrip(&mut state).unwrap();
-        event_queue.roundtrip(&mut state).unwrap();
+        event_queue.roundtrip(&mut state)
+            .map_err(|e| Error::WaylandDispatchError(e))?;
+        event_queue.roundtrip(&mut state)
+            .map_err(|e| Error::WaylandDispatchError(e))?;
 
         if !state.is_surface_configured() {
-            panic!("layer shell not configured")
+            return Err(Error::WaylandSurfaceConfigurationError)
         }
-        event_queue.roundtrip(&mut state).unwrap();
+        event_queue.roundtrip(&mut state)
+            .map_err(|e| Error::WaylandDispatchError(e))?;
 
 
         let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
@@ -55,9 +60,15 @@ impl WindowBuilder {
 
         let backend = conn.backend();
         let wl_display_ptr = backend.display_ptr() as *mut std::ffi::c_void;
+        if wl_display_ptr.is_null() {
+            return Err(Error::WgpuWindowError)
+        }
         let display_ptr = unsafe { core::ptr::NonNull::new_unchecked(wl_display_ptr) };
 
         let surface_ptr = state.surface.as_ref().unwrap().id().as_ptr() as *mut c_void;
+        if surface_ptr.is_null() {
+            return Err(Error::WgpuWindowError)
+        }
         let surface_ptr = unsafe { core::ptr::NonNull::new_unchecked(surface_ptr) };
 
         let wgpu_surface = unsafe {
@@ -84,9 +95,9 @@ impl WindowBuilder {
             &self,
         );
 
-        state.set_frame_callback(&qh);
+        state.set_frame_callback(&qh)?;
 
-        WgpuWindow {
+        Ok(WgpuWindow {
             wayland_event_queue: event_queue,
             wayland_state: state,
             wgpu_config: wgpu_config,
@@ -95,7 +106,7 @@ impl WindowBuilder {
             wgpu_queue,
             bg_alpha: self.bg_alpha,
             grid_renderer,
-        }
+        })
     }
 }
 
@@ -104,34 +115,6 @@ impl WgpuWindow {
         self.wayland_event_queue
             .blocking_dispatch(&mut self.wayland_state)
             .unwrap();
-    }
-
-    pub fn redraw<F>(&mut self, mut render_callback: F)
-    where
-        F: FnMut(),
-    {
-        // checks if redraw requested
-        if !self.wayland_state.needs_redraw {
-            return;
-        }
-        self.wayland_state.needs_redraw = false;
-
-        //render callback
-        render_callback();
-
-        // resets a frame callback
-        self.wayland_state.set_frame_callback(&self.wayland_event_queue.handle());
-    }
-
-    pub fn is_redraw(&mut self) -> bool {
-        if !self.wayland_state.needs_redraw {
-            return false
-        } else {
-            self.wayland_state.needs_redraw = false;
-            self.wayland_state.set_frame_callback(&self.wayland_event_queue.handle());
-            return true
-        }
-
     }
 
     pub fn clear_screen(&self) {
@@ -216,6 +199,22 @@ impl WgpuWindow {
         self.wgpu_queue.submit(vec![encoder.finish()]);
         output.present();
 
+    }
+    pub fn redraw<F>(&mut self, mut render_callback: F)
+    where
+        F: FnMut(&wgpu::Surface, &wgpu::Device, &mut wgpu::Queue, &wgpu::SurfaceConfiguration),
+    {
+        // checks if redraw requested
+        if !self.wayland_state.needs_redraw {
+            return;
+        }
+        self.wayland_state.needs_redraw = false;
+
+        //render callback
+        render_callback(&self.wgpu_surface, &self.wgpu_device, &mut self.wgpu_queue, &self.wgpu_config);
+
+        // resets a frame callback
+        self.wayland_state.set_frame_callback(&self.wayland_event_queue.handle()).unwrap();
     }
 }
 

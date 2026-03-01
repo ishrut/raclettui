@@ -19,11 +19,11 @@ fn main(){
         .set_layer(Layer::Top)
         .set_anchor(Anchor::Top)
         .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
-        .set_font_path("fonts/Some-Mono-Font.ttf")
+        // .set_font_path("fonts/Some-Mono-Font.ttf")
         .set_font_size(18.)
         .bg_alpha(0.5)
         // .init_cpu() // for cpu rendering
-        .init_wgpu();
+        .init_wgpu().unwrap();
 
     let events = window.get_event_queue();
     let mut terminal = Terminal::new(window).unwrap();

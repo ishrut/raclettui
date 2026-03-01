@@ -14,6 +14,7 @@ use xkbcommon::xkb;
 use crate::{
     builder::WindowBuilder,
     events::{self, WindowEvent, WindowEventQueue},
+    Error,
 };
 
 // holds wayland states
@@ -86,12 +87,13 @@ impl WgpuWaylandState {
         self.needs_redraw
     }
 
-    pub fn set_frame_callback(&mut self, qh: &QueueHandle<WgpuWaylandState >) {
+    pub fn set_frame_callback(&mut self, qh: &QueueHandle<WgpuWaylandState >) -> Result<(), Error> {
         if let Some(surface) = &self.surface {
             self.frame_callback = Some(surface.frame(&qh, ()));
         } else {
-            panic!("src/wgpu/wayland.rs Unable to set frame callback, surface None");
+            return Err(Error::WaylandFrameCallbackError)
         }
+        Ok(())
     }
 }
 

@@ -1,12 +1,12 @@
 use super::window::CpuWindow;
 use crate::colors;
 
-use std::{
-    io::{Seek, SeekFrom, Write},
-};
+use crate::Error;
+use std::io::Write;
+
 impl ratatui_core::backend::Backend for CpuWindow {
 
-    type Error = crate::Error ;
+    type Error = Error ;
 
     fn draw<'a, I>(&mut self, content: I) -> Result<(), Self::Error>
         where I: Iterator<Item = (u16, u16, &'a ratatui_core::buffer::Cell)>
@@ -20,18 +20,19 @@ impl ratatui_core::backend::Backend for CpuWindow {
         }
         self.wl_state.needs_redraw = false;
 
-        // getting variables
-        let file = self.wl_state.file.as_mut().unwrap();
-        file.seek(SeekFrom::Start(0)).unwrap();
-        let surface = self.wl_state.surface.as_ref().unwrap();
-        let wl_buffer = self.wl_state.buffer.as_ref().unwrap();
+        let (file, surface, wl_buffer) =
+            match (&mut self.wl_state.file, &self.wl_state.surface, &self.wl_state.buffer) {
+                (Some(file), Some(surface), Some(wl_buffer)) => (file, surface, wl_buffer),
+                _ => return Err(Error::WaylandSurfaceConfigurationError)
+        };
 
         // notify to redraw whole surface
         surface.damage(0, 0, self.wl_state.window_width as i32, self.wl_state.window_height as i32);
 
         // draws cells
         for (x, y, cell) in content {
-            let ch = cell.symbol().chars().next().unwrap();
+            let ch = cell.symbol().chars().next()
+                .ok_or(Error::RatatuiBackendError)?;
             let bg = colors::to_rgba(cell.bg, (0, 0, 0), self.bg_alpha);
             let fg = colors::to_rgba(cell.fg,(255, 255, 255), self.fg_alpha);
             self.buffer.set_bg_at_cell(x as u32, y as u32, bg);
@@ -40,13 +41,15 @@ impl ratatui_core::backend::Backend for CpuWindow {
         }
 
         // committing the changes
-        file.write_all(&self.buffer.inner).unwrap();
-        file.flush().unwrap();
+        file.write_all(&self.buffer.inner)
+            .map_err(|e| Error::IoError(e))?;
+        file.flush()
+            .map_err(|e| Error::IoError(e))?;
         surface.attach(Some(wl_buffer), 0, 0);
         surface.commit();
 
         // resetting callback
-        self.wl_state.set_frame_callback(&self.wl_event_queue.handle());
+        self.wl_state.set_frame_callback(&self.wl_event_queue.handle())?;
         Ok(())
     }
     fn flush(&mut self) -> Result<(), Self::Error> {

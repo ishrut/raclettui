@@ -20,7 +20,7 @@ fn main(){
         .set_font_path("fonts/DaddyTimeMonoNerdFont-Regular.ttf")
         .set_font_size(18.)
         .bg_alpha(0.5)
-        .init_cpu();
+        .init_cpu().unwrap();
 
     let events = window.get_event_queue();
     let mut terminal = Terminal::new(window).unwrap();

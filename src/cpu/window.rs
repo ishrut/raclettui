@@ -83,7 +83,7 @@ impl WindowBuilder {
         surface.commit();
 
         // set frame callback
-        state.set_frame_callback(&qh);
+        state.set_frame_callback(&qh)?;
 
         Ok(CpuWindow {
          wl_state: state,
@@ -131,11 +131,11 @@ impl CpuWindow {
         surface.commit();
 
         // resetting callback
-        self.wl_state.set_frame_callback(&self.wl_event_queue.handle());
+        self.wl_state.set_frame_callback(&self.wl_event_queue.handle())?;
         Ok(())
     }
 
-    /// Updates the window events, blocking
+    /// Updates the window events, blocking until wayland send events
     pub fn update(&mut self) {
         self.wl_event_queue.blocking_dispatch(&mut self.wl_state).unwrap();
     }

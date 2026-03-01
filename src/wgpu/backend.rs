@@ -1,5 +1,6 @@
 use super::window::WgpuWindow;
 use crate::colors;
+use crate::Error;
 
 impl ratatui_core::backend::Backend for WgpuWindow {
 
@@ -18,7 +19,8 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         self.wayland_state.needs_redraw = false;
 
         for (x, y, cell) in content {
-            let ch = cell.symbol().chars().next().unwrap();
+            let ch = cell.symbol().chars().next()
+                .ok_or(Error::RatatuiBackendError)?;
             let bg = colors::to_rgba(cell.bg, (0, 0, 0), self.bg_alpha);
             let fg = colors::to_rgba(cell.fg,(255, 255, 255), self.bg_alpha);
 
@@ -66,7 +68,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         output.present();
 
         // resetting callback
-        self.wayland_state.set_frame_callback(&self.wayland_event_queue.handle());
+        self.wayland_state.set_frame_callback(&self.wayland_event_queue.handle())?;
         Ok(())
     }
     fn flush(&mut self) -> Result<(), Self::Error> {

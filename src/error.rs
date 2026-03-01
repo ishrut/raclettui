@@ -5,6 +5,9 @@ pub enum Error {
     WaylandDispatchError(wayland_client::DispatchError),
     WaylandSurfaceConfigurationError,
     IoError(std::io::Error),
+    WaylandFrameCallbackError,
+    RatatuiBackendError,
+    WgpuWindowError,
 }
 
 impl std::error::Error for Error {}
@@ -15,7 +18,10 @@ impl std::fmt::Display for Error {
             Self::WaylandConnectError(e) => write!(f, "{}", e),
             Self::WaylandDispatchError(e) => write!(f, "{}", e),
             Self::WaylandSurfaceConfigurationError => write!(f, "wayland surface not configured"),
-            Self::IoError(e) => write!(f, "{}", e)
+            Self::IoError(e) => write!(f, "{}", e),
+            Self::WaylandFrameCallbackError => write!(f, "unable to set wayland frame callback, surface dropped?"),
+            Self::RatatuiBackendError => write!(f, "ratatui backend error"),
+            Self::WgpuWindowError => write!(f, "error creating wgpu window"),
         }
     }
 }
