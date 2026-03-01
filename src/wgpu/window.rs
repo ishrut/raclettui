@@ -86,12 +86,14 @@ impl WindowBuilder {
         let wgpu_config = utils::wgpu_get_surface_config(&wgpu_surface, &adapter, state.window_width, state.window_height);
         wgpu_surface.configure(&wgpu_device, &wgpu_config);
 
-        let font = self.get_font();
+        // to obtain from window builder
+        let font = glyphon::FontSystem::new();
 
         let grid_renderer = GridRenderer::new(
             font,
             &wgpu_config,
             &wgpu_device,
+            &wgpu_queue,
             &self,
         );
 
@@ -194,7 +196,8 @@ impl WgpuWindow {
                 multiview_mask: None,
             });
             self.grid_renderer.render_background(&self.wgpu_device, &mut render_pass);
-            self.grid_renderer.render_text(&self.wgpu_device, &self.wgpu_queue, &mut render_pass);
+            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass);
+            // self.grid_renderer.render_text(&self.wgpu_device, &self.wgpu_queue, &mut render_pass);
         }
         self.wgpu_queue.submit(vec![encoder.finish()]);
         output.present();
@@ -218,122 +221,3 @@ impl WgpuWindow {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct Cell {
-    pub ch: char,
-    pub fg_color: (u8, u8, u8),
-    pub bg_color: (u8, u8, u8),
-}
-
-impl Cell {
-    pub fn new(ch: char, fg: (u8, u8, u8), bg: (u8, u8, u8)) -> Self {
-        Self {ch, fg_color: fg, bg_color: bg }
-    }
-}
-
-impl Default for Cell {
-    fn default() -> Self {
-        Cell {
-            ch: ' ',
-            fg_color: (255, 255, 255),
-            bg_color: (0, 0, 0),
-        }
-    }
-}
-
-pub struct Grid {
-    cells: Vec<Vec<Cell>>,
-    cols: usize,
-    rows: usize,
-}
-
-impl Grid {
-
-    pub fn new(rows: usize, cols: usize) -> Self {
-        let mut cells = Vec::new();
-        for _i in 0..rows {
-            let mut row = Vec::new();
-            for _j in 0..cols {
-                row.push(Cell::default());
-            }
-            cells.push(row);
-        }
-        Grid {
-            cells,
-            cols,
-            rows,
-        }
-    }
-
-    pub fn resize(&mut self, cols: usize, rows: usize) {
-        // If size hasn't changed, nothing to do
-        if cols == self.cols && rows == self.rows {
-            return;
-        }
-
-        let mut new_cells = Vec::new();
-        for _i in 0..rows {
-            let mut row = Vec::new();
-            for _j in 0..cols {
-                row.push(Cell::default());
-            }
-            new_cells.push(row);
-        }
-
-        // Copy overlapping content from old buffer to new buffer
-        let copy_rows = self.rows.min(rows);
-        let copy_cols = self.cols.min(cols);
-
-        for row in 0..copy_rows {
-            for col in 0..copy_cols {
-                new_cells[row][col] = self.cells[row][col]
-            }
-        }
-
-        // Update grid state
-        self.cols = cols;
-        self.rows = rows;
-        self.cells = new_cells;
-
-    }
-
-    pub fn get_cell(&self, row: usize, col: usize) -> Option<&Cell> {
-        match self.cells.get(row) {
-            Some(row_v) => {
-                match row_v.get(col) {
-                    Some(v) => Some(v),
-                    None => None
-                }
-            }
-            None => None
-        }
-    }
-
-    pub fn set_cell(
-        &mut self,
-         row: usize,
-         col: usize,
-         ch: char,
-         fg: (u8, u8, u8),
-         bg: (u8, u8, u8),
-     )
-     {
-         let cell = Cell {
-             ch,
-             fg_color: fg,
-             bg_color: bg,
-         };
-
-        if col < self.cols && row < self.rows {
-            self.cells[row][col] = cell
-        }
-    }
-
-    pub fn cols(&self) -> usize {
-        self.cols
-    }
-
-    pub fn rows(&self) -> usize {
-        self.rows
-    }
-}

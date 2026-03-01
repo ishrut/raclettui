@@ -241,4 +241,11 @@ impl WindowBuilder {
             fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap()
         }
     }
+
+    pub fn get_font_system(&self) -> glyphon::FontSystem {
+        if let Some(path) = self.font_path {
+            // let font_system = glyphon::FontSystem::new_with_fonts(path);
+        }
+        todo!()
+    }
 }

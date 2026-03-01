@@ -17,6 +17,7 @@ ab_glyph = "0.2.32"
 bytemuck = "1.25.0"
 fontdb = "0.23.0"
 fontdue = "0.9.3"
+glyphon = "0.10.0"
 khronos-egl = { version = "6.0.0", features = ["static"] }
 pollster = "0.4.0"
 ratatui-core = "0.1.0"

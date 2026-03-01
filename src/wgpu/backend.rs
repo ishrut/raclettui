@@ -21,15 +21,17 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         for (x, y, cell) in content {
             let ch = cell.symbol().chars().next()
                 .ok_or(Error::RatatuiBackendError)?;
+            // println!("ch is: {}", ch);
             let bg = colors::to_rgba(cell.bg, (0, 0, 0), self.bg_alpha);
             let fg = colors::to_rgba(cell.fg,(255, 255, 255), self.bg_alpha);
 
-            self.grid_renderer.grid.set_cell(
-            y as usize,
-            x as usize,
+            self.grid_renderer.grid.set_bg(y as u32, x as u32, (bg.0, bg.1, bg.2));
+            self.grid_renderer.grid.set_ch(
+            y as u32,
+            x as u32,
                 ch,
             (fg.0, fg.1, fg.2),
-            (bg.0, bg.1, bg.2)
+            &mut self.grid_renderer.font_system,
             );
         }
 
@@ -62,7 +64,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                 multiview_mask: None,
             });
             self.grid_renderer.render_background(&self.wgpu_device, &mut render_pass);
-            self.grid_renderer.render_text(&self.wgpu_device, &self.wgpu_queue, &mut render_pass);
+            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass);
         }
         self.wgpu_queue.submit(vec![encoder.finish()]);
         output.present();
@@ -86,8 +88,8 @@ impl ratatui_core::backend::Backend for WgpuWindow {
         Ok(())
     }
     fn size(&self) -> Result<ratatui_core::layout::Size, Self::Error> {
-        let width = self.grid_renderer.grid.cols();
-        let height = self.grid_renderer.grid.rows();
+        let width = self.grid_renderer.grid.cols;
+        let height = self.grid_renderer.grid.rows;
         let size = ratatui_core::layout::Size::new(width as u16, height as u16);
         Ok(size)
     }
