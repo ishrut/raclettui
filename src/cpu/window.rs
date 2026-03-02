@@ -62,7 +62,7 @@ impl WindowBuilder {
         );
 
         // clears screen with black
-        let color = colors::rgba_premultiplied((0, 0, 0, 0), self.bg_alpha);
+        let color = colors::rgba_premultiplied((0, 0, 0, 1), 1.0);
         buffer.clear(color);
 
         // getting variable for first attach
@@ -165,3 +165,4 @@ impl CpuWindow {
         self.wl_state.window_height
     }
 }
+
