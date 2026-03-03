@@ -1,6 +1,6 @@
 [package]
 name = "raclettui"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2024"
 description = "Build terminal-themed wayland layer shell applications with Rust."
 license = "MIT"
