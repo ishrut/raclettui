@@ -1,7 +1,7 @@
-use glyphon::{FontSystem, cosmic_text};
+use glyphon::FontSystem;
 use wgpu::util::DeviceExt;
 
-use crate::colors;
+use crate::colors::{self, RaclettuiColor};
 use crate::builder::WindowBuilder;
 
 const CELL_WIDTH_F: f32 = 1.4;
@@ -15,7 +15,7 @@ pub struct TerminalGrid {
     pub rows: u32,
     pub cols: u32,
     pub ch_buffer: Vec<glyphon::Buffer>,
-    pub bg_buffer: Vec<(u8, u8, u8)>,
+    pub bg_buffer: Vec<RaclettuiColor>,
 
     pub fg_alpha: f32,
     pub bg_alpha: f32,
@@ -46,7 +46,7 @@ impl TerminalGrid {
                 glyphon::Buffer::new(font_system, glyphon::Metrics::new(font_size, line_height));
                 (rows*cols) as usize
             ],
-            bg_buffer: vec![(0, 0, 0); (rows* cols) as usize],
+            bg_buffer: vec![RaclettuiColor::new(); (rows* cols) as usize],
             fg_alpha,
             bg_alpha,
         }
@@ -58,7 +58,7 @@ impl TerminalGrid {
         row: u32,
         col: u32,
         ch: char,
-        color: (u8, u8, u8),
+        color: RaclettuiColor,
         font_system: &mut FontSystem,
     )
     {
@@ -72,7 +72,7 @@ impl TerminalGrid {
             font_system,
             ch.to_string().as_str(),
             &glyphon::Attrs::new()
-                .color(glyphon::Color::rgba(color.0, color.1, color.2, alpha))
+                .color(color.into())
                 .family(glyphon::cosmic_text::Family::Monospace),
                 // .style(cosmic_text::Style::Italic)
             glyphon::Shaping::Advanced,
@@ -85,7 +85,7 @@ impl TerminalGrid {
         &mut self,
         row: u32,
         col: u32,
-        color: (u8, u8, u8),
+        color: RaclettuiColor,
     )
     {
         if row >= self.rows || col >= self.cols {
@@ -260,7 +260,7 @@ impl GridRenderer {
                     blend: Some(
                         wgpu::BlendState {
                             color: wgpu::BlendComponent::OVER,
-                            alpha: wgpu::BlendComponent::REPLACE,
+                            alpha: wgpu::BlendComponent::OVER,
                         }
                     ),
                     write_mask: wgpu::ColorWrites::all(),
@@ -312,7 +312,8 @@ impl GridRenderer {
                 let y0 = 1.0 - (y / self.window_height as f32) * 2.0;
                 let x1 = ((x + self.cell_width as f32) / self.window_width as f32) * 2.0 - 1.0;
                 let y1 = 1.0 - ((y + self.cell_height as f32) / self.window_height as f32) * 2.0;
-                let color = colors::linear_color(bg_color, self.grid.bg_alpha);
+                // let color = colors::linear_color(bg_color, self.grid.bg_alpha);
+                let color = bg_color.to_linear();
 
                 vertices.extend_from_slice(&[
                     QuadVertex { position: [x0, y0], color },

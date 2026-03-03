@@ -1,6 +1,9 @@
-use raclettui::WindowBuilder;
-use raclettui::layer::{Anchor, Layer};
-use raclettui::events::{WindowEvent, KeyCode};
+use raclettui::{
+    WindowBuilder,
+    events::{KeyCode, WindowEvent},
+    layer::{Anchor, Layer}
+};
+
 use ratatui::{
     Terminal,
     border,
@@ -8,17 +11,18 @@ use ratatui::{
     widgets::{Block, Paragraph}
 };
 
-fn main(){
+fn main() {
+    // let font = include_bytes!("../fonts/DaddyTimeMonoNerdFont-Regular.ttf") as &[u8];
+    // let font = fontdue::Font::from_bytes(font, fontdue::FontSettings::default()).unwrap();
 
     let window = WindowBuilder::new()
         .set_namespace("example")
-        .set_width(300)
-        .set_height(300)
+        .set_width(500)
+        .set_height(484)
         .set_layer(Layer::Top)
         .set_anchor(Anchor::Top)
+        .set_font_path("fonts/AdwaitaMonoNerdFont-Regular.ttf")
         .set_keyboard_interactivity(raclettui::KeyboardInteractivity::OnDemand)
-        .set_font_path("fonts/DaddyTimeMonoNerdFont-Regular.ttf")
-        .set_font_size(18.)
         .bg_alpha(0.5)
         .init_cpu().unwrap();
 
@@ -29,7 +33,7 @@ fn main(){
 
         terminal.draw(|f| {
             let size = f.area();
-            let paragraph = Paragraph::new("Hello World")
+            let paragraph = Paragraph::new("Hello World!")
                 .block(
                     Block::new()
                     .borders(border!(TOP, BOTTOM, RIGHT, LEFT))
@@ -44,10 +48,9 @@ fn main(){
                     KeyCode::Char('q') => break 'app_loop,
                     _ => {}
                 }
-
             }
         }
-
     }
-
 }
+
+

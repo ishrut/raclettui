@@ -1,6 +1,7 @@
 use super::window::WgpuWindow;
 use crate::colors;
 use crate::Error;
+use crate::colors::RaclettuiColor;
 
 impl ratatui_core::backend::Backend for WgpuWindow {
 
@@ -25,19 +26,23 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                 .chars()
                 .next()
                 .ok_or(Error::RatatuiBackendError)?;
+
             let bg_alpha = self.grid_renderer.grid.bg_alpha;
             let fg_alpha = self.grid_renderer.grid.bg_alpha;
-            // into functions for these colors
-            let bg = colors::to_rgba(cell.bg, (0, 0, 0), bg_alpha);
-            let fg = colors::to_rgba(cell.fg,(255, 255, 255), bg_alpha);
+            let bg_color = RaclettuiColor::from(cell.bg).set_alpha(bg_alpha);
+            let fg_color = RaclettuiColor::from(cell.fg).set_alpha(fg_alpha);
 
-            self.grid_renderer.grid.set_bg(y as u32, x as u32, (bg.0, bg.1, bg.2));
+            self.grid_renderer.grid.set_bg(
+                y as u32,
+                x as u32,
+                bg_color
+            );
             self.grid_renderer.grid.set_ch(
-            y as u32,
-            x as u32,
+                y as u32,
+                x as u32,
                 ch,
-            (fg.0, fg.1, fg.2),
-            &mut self.grid_renderer.font_system,
+                fg_color,
+                &mut self.grid_renderer.font_system,
             );
         }
 

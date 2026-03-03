@@ -247,22 +247,23 @@ impl WindowBuilder {
 
     // kinda need to give option to force a font by path.
     pub fn get_font_system(&self) -> Result<glyphon::FontSystem, Error> {
-        if let Some(path) = self.font_path {
-            let path_buf = std::path::PathBuf::from(path);
-            let source = fontdb::Source::File(path_buf);
-            let font_system = glyphon::FontSystem::new_with_fonts(std::iter::once(source));
-            let db =  font_system.db();
-            let query = fontdb::Query {
-                families: &[fontdb::Family::Monospace],
-                ..Default::default()
-            };
-            let _font_id = db
-                .query(&query)
-                .ok_or(Error::FontLoadingError)?;
-            Ok(font_system)
-        } else {
+        // if let Some(path) = self.font_path {
+        //     let path_buf = std::path::PathBuf::from(path);
+        //     let source = fontdb::Source::File(path_buf);
+        //     let font_system = glyphon::FontSystem::new_with_fonts(std::iter::once(source));
+        //     println!("loaded: {:?}", font_system);
+        //     let db =  font_system.db();
+        //     let query = fontdb::Query {
+        //         families: &[fontdb::Family::Monospace],
+        //         ..Default::default()
+        //     };
+        //     let _font_id = db
+        //         .query(&query)
+        //         .ok_or(Error::FontLoadingError)?;
+        //     Ok(font_system)
+        // } else {
             let font_system = glyphon::FontSystem::new();
             Ok(font_system)
-        }
+        // }
     }
 }

@@ -51,7 +51,7 @@ pub fn wgpu_get_surface_config(surface: &wgpu::Surface, adapter: &wgpu::Adapter,
         .iter()
         .copied()
         // only opaque supported for me
-        .find(|m| *m != wgpu::CompositeAlphaMode::Opaque)
+        .find(|m| *m != wgpu::CompositeAlphaMode::PostMultiplied)
         .unwrap_or(wgpu::CompositeAlphaMode::Auto);
 
     let wgpu_config = wgpu::SurfaceConfiguration {

@@ -21,9 +21,9 @@ use crate::{
     Error,
 };
 
-// holds wayland states
 pub struct CpuWaylandState {
-    // data needed to initialise window
+
+    // builder variables to configure window
     layer: zwlr_layer_shell_v1::Layer,
     namespace: String,
     anchors: Vec<zwlr_layer_surface_v1::Anchor>,
@@ -32,7 +32,7 @@ pub struct CpuWaylandState {
     exclusive_edge: Option<zwlr_layer_surface_v1::Anchor>,
     keyboard_interactivity: Option<zwlr_layer_surface_v1::KeyboardInteractivity>,
 
-    // objects to create surface
+    // wayland objects
     compositor: Option<wl_compositor::WlCompositor>,
     shm: Option<wl_shm::WlShm>,
     layer_shell: Option<ZwlrLayerShellV1>,
@@ -44,14 +44,13 @@ pub struct CpuWaylandState {
     pub buffer: Option<wl_buffer::WlBuffer>,
     pub file: Option<File>,
 
-    surface_configured: bool,
+    pub surface_configured: bool,
     pub frame_callback: Option<wl_callback::WlCallback>,
     pub needs_redraw: bool,
 
     pub window_width: u32,
     pub window_height: u32,
 
-    // keyboard and mouse events objects
     seat: Option<wl_seat::WlSeat>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
@@ -67,13 +66,14 @@ impl CpuWaylandState {
         let window_height = builder.height;
 
         Self {
-            anchors: builder.anchors.clone(),
-            keyboard_interactivity: builder.keyboard_interactivity.clone(),
-            exclusive_zone: builder.exclusive_zone.clone(),
-            exclusive_edge: builder.exclusive_edge.clone(),
-            margins: builder.margin.clone(),
-            layer: builder.layer.clone(),
+            layer: builder.layer,
+            exclusive_zone: builder.exclusive_zone,
+            exclusive_edge: builder.exclusive_edge,
+            margins: builder.margin,
             namespace: builder.namespace.clone(),
+            keyboard_interactivity: builder.keyboard_interactivity,
+            anchors: builder.anchors.clone(),
+
             compositor: None,
             shm: None,
             layer_shell: None,
@@ -104,7 +104,7 @@ impl CpuWaylandState {
         self.needs_redraw
     }
 
-    pub fn set_frame_callback(&mut self, qh: &QueueHandle<CpuWaylandState>) -> Result<(), Error> {
+    pub fn set_frame_callback(&mut self, qh: &QueueHandle<CpuWaylandState >) -> Result<(), Error> {
         if let Some(surface) = &self.surface {
             self.frame_callback = Some(surface.frame(&qh, ()));
         } else {
@@ -134,14 +134,40 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
                 "wl_compositor" => {
                     let compositor =
                         registry.bind::<wl_compositor::WlCompositor, _, _>(name, version, qh, ());
+
                     let surface = compositor.create_surface(qh, ());
                     state.surface = Some(surface);
                     state.compositor = Some(compositor);
                 }
                 "wl_shm" => {
                     let shm = registry.bind::<wl_shm::WlShm, _, _>(name, version, qh, ());
-                    state.shm = Some(shm);
 
+                    let file = match tempfile() {
+                        Ok(file) => file,
+                        Err(e) => panic!("src/cpu/wayland.rs unable to create temp file: {}", e),
+                    };
+                    let size = (state.window_width * state.window_height * 4) as i32;
+
+                    match file.set_len(size as u64) {
+                        Ok(_) => {},
+                        Err(e) => panic!("src/cpu/wayland.rs unable to set len of file: {}", e),
+                    }
+
+                    let pool = shm.create_pool(file.as_fd(), size, qh, ());
+                    let buffer = pool.create_buffer(
+                        0,
+                        state.window_width as i32,
+                        state.window_height as i32,
+                        (state.window_width * 4) as i32,
+                        wl_shm::Format::Argb8888,
+                        qh,
+                        (),
+                    );
+
+                    state.pool = Some(pool);
+                    state.buffer = Some(buffer);
+                    state.file = Some(file);
+                    state.shm = Some(shm);
                 }
                 "zwlr_layer_shell_v1" => {
                     let layer_shell =
@@ -149,7 +175,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
 
                     let surface = match &state.surface {
                         Some(surface) => surface,
-                        None => panic!("src/cpu/wayland.rs unable to get wl_surface object to create zwlr_layer_shell_v1 object")
+                        None => panic!("src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface")
                     };
 
                     let layer_surface = layer_shell.get_layer_surface(
@@ -177,10 +203,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
                         layer_surface.set_exclusive_edge(edge);
                     }
 
-                    state.layer_shell = Some(layer_shell);
                     state.layer_surface = Some(layer_surface);
                     // initial commit without buffer attached
                     surface.commit();
+                    state.layer_shell = Some(layer_shell);
                 }
                 "wl_seat" => {
                     let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
@@ -200,7 +226,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for CpuWaylandState {
         event: zwlr_layer_surface_v1::Event,
         _: &(),
         _: &Connection,
-        qh: &QueueHandle<Self>,
+        _: &QueueHandle<Self>,
     ) {
         if let zwlr_layer_surface_v1::Event::Configure {
             serial,
@@ -212,31 +238,6 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for CpuWaylandState {
             state.window_width = width;
             state.window_height = height;
             state.surface_configured = true;
-            state.events.push(WindowEvent::new_resize_event(width, height));
-
-            let file = tempfile()
-                .expect("src/cpu/wayland.rs zwlr_layer_surface_v1 event unable to create file");
-            let size = (state.window_width * state.window_height * 4) as i32;
-
-            file.set_len(size as u64)
-                .expect("src/cpu/wayland.rs zwlr_layer_surface_v1 event unable to set file len");
-
-            if let Some(shm) = &state.shm {
-                let pool = shm.create_pool(file.as_fd(), size, qh, ());
-
-                let buffer = pool.create_buffer(
-                    0,
-                    state.window_width as i32,
-                    state.window_height as i32,
-                    (state.window_width * 4) as i32,
-                    wl_shm::Format::Argb8888,
-                    qh,
-                    (),
-                );
-                state.pool = Some(pool);
-                state.buffer = Some(buffer);
-            }
-            state.file = Some(file);
         }
     }
 }
@@ -257,8 +258,6 @@ impl Dispatch<wl_callback::WlCallback, ()> for CpuWaylandState {
     }
 }
 
-// Gets keyboard and pointer proxies
-// No touch support yet
 impl Dispatch<wl_seat::WlSeat, ()> for CpuWaylandState {
     fn event(
         state: &mut Self,
@@ -283,7 +282,6 @@ impl Dispatch<wl_seat::WlSeat, ()> for CpuWaylandState {
     }
 }
 
-// configures keymap and handles keyboard events
 impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
     fn event(
         own_state: &mut Self,
@@ -304,7 +302,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
                         );
                         own_state.events.push(window_event);
                     } else {
-                        eprintln!("src/cpu/wayland.rs keymap state not configured, cannot get get keyboard event")
+                        eprintln!("src/wgpu/wayland.rs keymap state not configured, cannot get get keyboard event")
                     }
                 }
             }
@@ -315,16 +313,14 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
                 group,
                 ..
             } => {
-                if let Some(keymap_state) = &mut own_state.keymap_state {
-                    keymap_state.update_mask(
-                        mods_depressed,
-                        mods_latched,
-                        mods_locked,
-                        0,
-                        0,
-                        group,
-                    );
-                }
+                own_state.keymap_state.as_mut().unwrap().update_mask(
+                    mods_depressed,
+                    mods_latched,
+                    mods_locked,
+                    0,
+                    0,
+                    group,
+                );
             }
             wl_keyboard::Event::Keymap { fd, size, .. } => {
                 let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS as xkb::ContextFlags);
@@ -337,16 +333,17 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
                         xkb::KEYMAP_COMPILE_NO_FLAGS,
                     )
                 };
+
                 if let Ok(keymap) = keymap_result {
                     own_state.keymap = keymap;
                 } else if let Err(e) = keymap_result {
-                    eprintln!("src/cpu/wayland.rs wl_keyboard event error getting keymap: {}", e);
+                    eprintln!("src/wgpu/wayland.rs wl_keyboard event error getting keymap: {}", e);
                 }
                 if let Some(keymap) = &own_state.keymap {
                     let keymap_state = xkb::State::new(keymap);
                     own_state.keymap_state = Some(keymap_state);
                 } else {
-                    eprintln!("src/cpu/wayland.rs wl_keyboard event no keymap");
+                    eprintln!("src/wgpu/wayland.rs wl_keyboard event no keymap");
                 }
             }
             _ => {}
@@ -354,7 +351,6 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
     }
 }
 
-// handles pointer events
 impl Dispatch<wl_pointer::WlPointer, ()> for CpuWaylandState {
     fn event(
         own_state: &mut Self,

@@ -1,40 +1,32 @@
 use std::collections::HashMap;
-// use ab_glyph::{self, Font, ScaleFont};
-use crate::colors;
-use fontdue;
+use fontdue::{LineMetrics, Metrics};
+
+use crate::colors::RaclettuiColor;
 
 #[derive(Debug)]
-pub struct CpuBuffer {
-    // holds data in pixels
+pub struct TerminalBuffer {
     pub inner: Vec<u8>,
     // window width in px
     pub window_width: u32,
     // window height in px
     pub window_height: u32,
-    // font used
     pub font: fontdue::Font,
     // in px
     pub font_size: f32,
-    // cache to store rasterised fonts
-    cache: HashMap<char, (fontdue::Metrics, Vec<u8>)>,
-    line_metrics: fontdue::LineMetrics,
     pub cell_width: u32,
     pub cell_height: u32,
-    fg_alpha: f32,
-    bg_alpha: f32,
+    pub cache: HashMap<char, (Metrics, Vec<u8>)>,
+    pub line_metrics: LineMetrics,
 }
 
-impl CpuBuffer {
+impl TerminalBuffer {
     pub fn new(
         window_width: u32,
         window_height: u32,
         font: fontdue::Font,
         font_size: f32,
-        fg_alpha: f32,
-        bg_alpha: f32,
     ) -> Self
     {
-
         let m_metrics = font.metrics('M', font_size);
         let line_metrics = font.horizontal_line_metrics(font_size).unwrap();
         let cell_height = (line_metrics.ascent - line_metrics.descent + line_metrics.line_gap).ceil() as u32;
@@ -47,31 +39,32 @@ impl CpuBuffer {
             window_width,
             window_height,
             font,
-            line_metrics,
+            font_size,
             cell_width,
             cell_height,
-            font_size,
-            cache: HashMap::<char, (fontdue::Metrics, Vec<u8>)>::new(),
-            // line_height_finetune,
-            fg_alpha,
-            bg_alpha,
+            cache: HashMap::<char, (Metrics, Vec<u8>)>::new(),
+            line_metrics
         }
     }
 
-    pub fn rows(&self) -> u32 {
-        self.window_height / self.cell_height
-    }
-    pub fn cols(&self) -> u32 {
-        self.window_width / self.cell_width
+    pub fn grid_dims(&self) -> (u32, u32) {
+        let cols = self.window_width / self.cell_width;
+        let rows = self.window_height / self.cell_height;
+        (cols, rows)
     }
 
-    fn set_pixel(&mut self, x: u32, y: u32, value: (u8, u8, u8, u8)) {
+    pub fn window_size(&self) -> (u32, u32) {
+        (self.window_width, self.window_height)
+    }
+
+    fn set_pixel(&mut self, x: u32, y: u32, color: &RaclettuiColor) {
         if x >= self.window_width {
             panic!("x out of range x: {}, y: {}", x, y)
         }
         if y >= self.window_height {
             panic!("y out of range x: {}, y: {}", x, y)
         }
+        let value = color.to_rgba();
 
         let index = ((y * self.window_width + x) * 4) as usize;
         self.inner[index] = value.2;
@@ -81,7 +74,7 @@ impl CpuBuffer {
     }
 
     // clears whole buffer with a color
-    pub fn clear(&mut self, color: (u8, u8, u8, u8)) {
+    pub fn clear(&mut self, color: &RaclettuiColor) {
         for i in 0..self.window_height {
             for j in 0..self.window_width {
                 self.set_pixel(j, i, color);
@@ -90,11 +83,10 @@ impl CpuBuffer {
     }
 
     // sets background at a cell
-    pub fn set_bg_at_cell(&mut self, x: u32, y: u32, color: (u8, u8, u8, u8)) {
+    pub fn set_bg_at_cell(&mut self, x: u32, y: u32, color: &RaclettuiColor) {
         let cell_px_x = x * self.cell_width;
         let cell_px_y = y * self.cell_height;
 
-        let color = colors::rgba_premultiplied(color, self.bg_alpha);
         for i in 0..self.cell_height {
             for j in 0..self.cell_width {
                 self.set_pixel(j + cell_px_x, i + cell_px_y, color);
@@ -103,17 +95,14 @@ impl CpuBuffer {
     }
 
     // draws a character at a cell, not that background needs prior setting
-    pub fn set_char_at_cell(&mut self, ch: char, x: u32, y: u32, color: (u8, u8, u8, u8)) {
+    pub fn set_char_at_cell(&mut self, ch: char, x: u32, y: u32, color: &RaclettuiColor) {
+        let color = color.to_rgba();
+        if !self.cache.contains_key(&ch) {
+            let val = self.font.rasterize(ch, self.font_size);
+            self.cache.insert(ch, val);
+        }
+        let (metrics, bitmap) = &self.cache.get(&ch).unwrap().clone();
 
-        let (metrics, bitmap) = {
-            if self.cache.contains_key(&ch) {
-                self.cache.get(&ch).unwrap().clone()
-            } else {
-                let val = self.font.rasterize(ch, self.font_size);
-                self.cache.insert(ch, val);
-                self.cache.get(&ch).unwrap().clone()
-            }
-        };
 
         let cell_px_x = x * self.cell_width;
         let cell_px_y = y * self.cell_height;
@@ -128,7 +117,7 @@ impl CpuBuffer {
         for y in 0..metrics_height {
             for x in 0..metrics_width {
                 let alpha = bitmap[y * metrics_width + x];
-                if alpha < 80 {
+                if alpha == 0 {
                     continue;
                 }
 
@@ -143,16 +132,19 @@ impl CpuBuffer {
                     continue;
                 }
 
-                let color = colors::rgba_premultiplied(color, self.fg_alpha);
+                let alpha_f = alpha as f32 / 255.0;
+
+                let r = (color.0 as f32 * alpha_f) as u8;
+                let g = (color.1 as f32 * alpha_f) as u8;
+                let b = (color.2 as f32 * alpha_f) as u8;
 
                 self.set_pixel(
                     px as u32,
                     py as u32,
-                    color
+                    &RaclettuiColor::from_rgb(r, g, b),
                 );
 
             }
         }
     }
-
 }

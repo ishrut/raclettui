@@ -1,4 +1,4 @@
-use raclettui::{WindowBuilder, Layer, Anchor, KeyboardInteractivity};
+use raclettui::{Anchor, KeyboardInteractivity, Layer, WindowBuilder, colors::RaclettuiColor};
 
 fn main() {
     let mut window = WindowBuilder::new()
@@ -31,24 +31,26 @@ fn main() {
             let fg_r = ((row * 40) % 256) as u8;
             let fg_g = ((col * 25) % 256) as u8;
             let fg_b = (((row + col) * 15) % 256) as u8;
+            let fg_color = RaclettuiColor::from_rgb(fg_r, fg_g, fg_b);
 
             // Background color gradient (different pattern)
             let bg_r = ((col * 30) % 256) as u8;
             let bg_g = ((row * 50) % 256) as u8;
             let bg_b = (((row * col) * 5) % 256) as u8;
+            let bg_color = RaclettuiColor::from_rgb(bg_r, bg_g, bg_b);
 
-            window.grid_renderer.grid.set_bg(row, col, (bg_r, bg_g, bg_b));
+            window.grid_renderer.grid.set_bg(row, col, bg_color);
             window.grid_renderer.grid.set_ch(
                 row,
                 col,
                 ch,
-                (fg_r, fg_g, fg_b),
+                fg_color,
                 &mut window.grid_renderer.font_system,
             );
         }
     }
     'app_loop: loop {
-        window.update();
+        window.update().unwrap();
         if !window.wayland_state.needs_redraw {
             continue;
         }

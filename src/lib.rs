@@ -2,7 +2,7 @@ mod builder;
 mod cpu;
 pub mod wgpu;
 pub mod events;
-mod colors;
+pub mod colors;
 mod error;
 
 pub use layer::{Layer, Anchor, KeyboardInteractivity};

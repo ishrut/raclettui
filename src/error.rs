@@ -12,6 +12,7 @@ pub enum Error {
     WgpuSurfaceError(wgpu::SurfaceError),
     WgpuAdapterError(wgpu::RequestAdapterError),
     WgpuRequestDeviceError(wgpu::RequestDeviceError),
+    UnsupportedBackendFeature,
 }
 
 impl std::error::Error for Error {}
@@ -30,6 +31,7 @@ impl std::fmt::Display for Error {
             Self::WgpuSurfaceError(e) => write!(f, "{}", e),
             Self::WgpuAdapterError(e) => write!(f, "{}", e),
             Self::WgpuRequestDeviceError(e) => write!(f, "{}", e),
+            Self::UnsupportedBackendFeature => write!(f, "unsupported backend feature"),
         }
     }
 }
