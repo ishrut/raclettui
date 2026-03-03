@@ -1,8 +1,9 @@
 use glyphon::FontSystem;
 use wgpu::util::DeviceExt;
 
-use crate::colors::{self, RaclettuiColor};
+use crate::colors::RaclettuiColor;
 use crate::builder::WindowBuilder;
+use crate::Error;
 
 const CELL_WIDTH_F: f32 = 1.4;
 const CELL_HEIGHT_F: f32 = 1.1;
@@ -60,14 +61,13 @@ impl TerminalGrid {
         ch: char,
         color: RaclettuiColor,
         font_system: &mut FontSystem,
-    )
+    ) -> Result<(), Error>
     {
         if row >= self.rows || col >= self.cols {
-            return;
+            return Err(Error::OutOfBounds)
         }
 
         let idx = (row * self.cols + col) as usize;
-        let alpha = (self.fg_alpha * 255.) as u8;
         self.ch_buffer[idx].set_text(
             font_system,
             ch.to_string().as_str(),
@@ -79,6 +79,7 @@ impl TerminalGrid {
             None,
         );
         self.ch_buffer[idx].shape_until_scroll(font_system, false);
+        Ok(())
     }
 
     pub fn set_bg(
@@ -86,13 +87,14 @@ impl TerminalGrid {
         row: u32,
         col: u32,
         color: RaclettuiColor,
-    )
+    ) -> Result<(), Error>
     {
         if row >= self.rows || col >= self.cols {
-            panic!("src/wgpu/render.rs setting values out of bounds")
+            return Err(Error::OutOfBounds)
         }
         let idx = (row * self.cols + col) as usize;
         self.bg_buffer[idx] = color;
+        Ok(())
     }
 
     fn get_text_areas(&self) -> Vec<glyphon::TextArea<'_>> {
@@ -116,16 +118,12 @@ impl TerminalGrid {
                     },
                     default_color: glyphon::Color::rgba(255, 255, 255, 255),
                     custom_glyphs: &[]
-
                 };
                 text_areas.push(text_area);
-
             }
         }
         text_areas
-
     }
-
 }
 
 
@@ -162,7 +160,7 @@ impl GridRenderer {
         queue: &wgpu::Queue,
         window_builder: &WindowBuilder,
 
-    ) -> Self {
+    ) -> Result<Self, Error> {
 
         // text renderer and grid initialisation.
         let swapchain_format = surface_config.format;
@@ -193,7 +191,8 @@ impl GridRenderer {
             None
          );
         let mut layout = text_buffer.layout_runs();
-        let char_width = layout.next().unwrap().line_w;
+        let char_width = layout.next()
+            .ok_or(Error::CharWidthError)?.line_w;
 
         let physical_width = surface_config.width as f32;
         let physical_height = surface_config.height as f32;
@@ -275,7 +274,7 @@ impl GridRenderer {
         });
 
 
-        Self {
+        Ok(Self {
             font_system,
             grid,
             window_width: surface_config.width,
@@ -289,7 +288,7 @@ impl GridRenderer {
             atlas,
 
             quad_pipeline,
-        }
+        })
     }
 
     // to be optimised to use instancing
@@ -349,7 +348,8 @@ impl GridRenderer {
         queue: &wgpu::Queue,
         device: &wgpu::Device,
         render_pass: &mut wgpu::RenderPass,
-    ) {
+    ) -> Result<(), Error>
+    {
         self.viewport.update(
             queue,
             glyphon::Resolution {
@@ -370,9 +370,11 @@ impl GridRenderer {
                 text_areas,
                 &mut self.swash_cache,
             )
-                .unwrap();
-        self.text_renderer.render(&self.atlas, &self.viewport, render_pass).unwrap();
-
+            .map_err(|e| Error::TextRenderPrepareError(e))?;
+        self.text_renderer
+            .render(&self.atlas, &self.viewport, render_pass)
+            .map_err(|e| Error::TextRenderError(e))?;
+        Ok(())
     }
 
     pub fn cell_width(&self) -> f32 {

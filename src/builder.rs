@@ -205,12 +205,12 @@ impl WindowBuilder {
     }
 
     /// Sets window transparency
-    pub fn bg_alpha(mut self, alpha: f32) -> Self {
+    pub fn set_bg_alpha(mut self, alpha: f32) -> Self {
         self.bg_alpha = alpha;
         self
     }
 
-    pub fn fg_alpha(mut self, alpha: f32) -> Self {
+    pub fn set_fg_alpha(mut self, alpha: f32) -> Self {
         self.fg_alpha = alpha;
         self
     }

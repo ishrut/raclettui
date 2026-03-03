@@ -96,7 +96,7 @@ impl WindowBuilder {
             &wgpu_device,
             &wgpu_queue,
             &self,
-        );
+        )?;
 
         state.set_frame_callback(&qh)?;
 
@@ -171,7 +171,8 @@ impl WgpuWindow {
     // for testing purposes function
     pub fn render(
         &mut self,
-    ) {
+    ) -> Result<(), Error>
+    {
 
         let output = self.wgpu_surface.get_current_texture().unwrap();
         let view = output
@@ -202,11 +203,12 @@ impl WgpuWindow {
                 multiview_mask: None,
             });
             self.grid_renderer.render_background(&self.wgpu_device, &mut render_pass);
-            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass);
+            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass)?;
             // self.grid_renderer.render_text(&self.wgpu_device, &self.wgpu_queue, &mut render_pass);
         }
         self.wgpu_queue.submit(vec![encoder.finish()]);
         output.present();
+        Ok(())
 
     }
 

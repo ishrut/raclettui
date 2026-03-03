@@ -1,4 +1,5 @@
-use crate::{colors::RaclettuiColor, events::{WindowEvent, WindowEventQueue}};
+use crate::colors::RaclettuiColor;
+use crate::events::WindowEventQueue;
 use super::wayland::CpuWaylandState;
 use crate::builder::WindowBuilder;
 use super::buffer::TerminalBuffer;

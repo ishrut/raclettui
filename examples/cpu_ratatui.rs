@@ -12,8 +12,6 @@ use ratatui::{
 };
 
 fn main() {
-    // let font = include_bytes!("../fonts/DaddyTimeMonoNerdFont-Regular.ttf") as &[u8];
-    // let font = fontdue::Font::from_bytes(font, fontdue::FontSettings::default()).unwrap();
 
     let window = WindowBuilder::new()
         .set_namespace("example")
@@ -23,7 +21,7 @@ fn main() {
         .set_anchor(Anchor::Top)
         .set_font_path("fonts/AdwaitaMonoNerdFont-Regular.ttf")
         .set_keyboard_interactivity(raclettui::KeyboardInteractivity::OnDemand)
-        .bg_alpha(0.5)
+        .set_bg_alpha(0.5)
         .init_cpu().unwrap();
 
     let events = window.get_event_queue();

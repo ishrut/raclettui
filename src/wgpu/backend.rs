@@ -1,5 +1,4 @@
 use super::window::WgpuWindow;
-use crate::colors;
 use crate::Error;
 use crate::colors::RaclettuiColor;
 
@@ -36,14 +35,14 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                 y as u32,
                 x as u32,
                 bg_color
-            );
+            )?;
             self.grid_renderer.grid.set_ch(
                 y as u32,
                 x as u32,
                 ch,
                 fg_color,
                 &mut self.grid_renderer.font_system,
-            );
+            )?;
         }
 
         let output = self.wgpu_surface.get_current_texture()
@@ -76,7 +75,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                 multiview_mask: None,
             });
             self.grid_renderer.render_background(&self.wgpu_device, &mut render_pass);
-            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass);
+            self.grid_renderer.render_text(&mut self.wgpu_queue, &self.wgpu_device, &mut render_pass)?;
         }
         self.wgpu_queue.submit(vec![encoder.finish()]);
         output.present();

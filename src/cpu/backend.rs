@@ -125,7 +125,7 @@ impl ratatui_core::backend::Backend for CpuWindow {
         Err(Error::UnsupportedBackendFeature)
     }
 
-    fn set_cursor_position<P: Into<ratatui_core::layout::Position>>(&mut self, position: P) -> Result<(), Self::Error> {
+    fn set_cursor_position<P: Into<ratatui_core::layout::Position>>(&mut self, _position: P) -> Result<(), Self::Error> {
         Err(Error::UnsupportedBackendFeature)
     }
 }

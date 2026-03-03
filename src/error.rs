@@ -13,6 +13,10 @@ pub enum Error {
     WgpuAdapterError(wgpu::RequestAdapterError),
     WgpuRequestDeviceError(wgpu::RequestDeviceError),
     UnsupportedBackendFeature,
+    OutOfBounds,
+    CharWidthError,
+    TextRenderPrepareError(glyphon::PrepareError),
+    TextRenderError(glyphon::RenderError),
 }
 
 impl std::error::Error for Error {}
@@ -32,6 +36,10 @@ impl std::fmt::Display for Error {
             Self::WgpuAdapterError(e) => write!(f, "{}", e),
             Self::WgpuRequestDeviceError(e) => write!(f, "{}", e),
             Self::UnsupportedBackendFeature => write!(f, "unsupported backend feature"),
+            Self::OutOfBounds => write!(f, "setting character out of bounds"),
+            Self::CharWidthError => write!(f, "unable to get font metrics to measure cell width"),
+            Self::TextRenderPrepareError(e) => write!(f, "{}", e),
+            Self::TextRenderError(e) => write!(f, "{}", e),
         }
     }
 }

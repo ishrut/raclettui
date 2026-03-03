@@ -10,7 +10,7 @@ fn main() {
         .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
         // .set_font_path("fonts/Some-Mono-Font.ttf")
         .set_font_size(18.)
-        .bg_alpha(0.5)
+        .set_bg_alpha(0.5)
         // .init_cpu() // for cpu rendering
         .init_wgpu().unwrap();
 
