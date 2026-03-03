@@ -116,7 +116,7 @@ impl CpuWindow {
 
     // updates the window events
     pub fn update(&mut self) -> Result<(), Error> {
-        self.event_queue.roundtrip(&mut self.state)
+        self.event_queue.blocking_dispatch(&mut self.state)
             .map_err(|e| Error::WaylandDispatchError(e))?;
         Ok(())
     }
