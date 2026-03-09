@@ -20,11 +20,11 @@ impl RaclettuiColor {
     }
 
     pub fn to_linear(&self) -> [f32; 4] {
-        let r_linear = Self::linearise(self.0) as f32;
-        let g_linear = Self::linearise(self.1) as f32;
-        let b_linear = Self::linearise(self.2) as f32;
-        let a_linear = self.3 as f32 / 255.;
-        [r_linear, g_linear, b_linear, a_linear]
+        let r = Self::linearise(self.0) as f32;
+        let g = Self::linearise(self.1) as f32;
+        let b = Self::linearise(self.2) as f32;
+        let a = self.3 as f32 / 255.;
+        [r * a, g * a, b * a, a]
     }
 
     fn linearise(value: u8) -> f64 {

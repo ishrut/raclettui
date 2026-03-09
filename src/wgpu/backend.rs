@@ -27,7 +27,7 @@ impl ratatui_core::backend::Backend for WgpuWindow {
                 .ok_or(Error::RatatuiBackendError)?;
 
             let bg_alpha = self.grid_renderer.grid.bg_alpha;
-            let fg_alpha = self.grid_renderer.grid.bg_alpha;
+            let fg_alpha = self.grid_renderer.grid.fg_alpha;
             let bg_color = RaclettuiColor::from(cell.bg).set_alpha(bg_alpha);
             let fg_color = RaclettuiColor::from(cell.fg).set_alpha(fg_alpha);
 

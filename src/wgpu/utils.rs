@@ -46,13 +46,14 @@ pub fn wgpu_get_surface_config(surface: &wgpu::Surface, adapter: &wgpu::Adapter,
         .copied()
         .unwrap_or(surface_caps.formats[0]);
 
-    let alpha_mode = surface_caps
+    let alpha_mode = if surface_caps
         .alpha_modes
-        .iter()
-        .copied()
-        // only opaque supported for me
-        .find(|m| *m != wgpu::CompositeAlphaMode::PostMultiplied)
-        .unwrap_or(wgpu::CompositeAlphaMode::Auto);
+        .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
+    {
+        wgpu::CompositeAlphaMode::PreMultiplied
+    } else {
+        surface_caps.alpha_modes[0]
+    };
 
     let wgpu_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
