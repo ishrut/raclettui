@@ -139,13 +139,13 @@ impl WindowEvent {
     }
 
     /// Create a new pointer motion event.
-    pub fn new_pointer_motion_event(x: f64, y: f64) -> Self {
-        Self::Pointer(MouseEvent::Motion { x, y })
+    pub fn new_pointer_motion_event(row: u32, col: u32) -> Self {
+        Self::Pointer(MouseEvent::Motion { row, col })
     }
 
     /// Create a pointer enter event.
-    pub fn new_pointer_enter_event(x: f64, y: f64) -> Self {
-        Self::Pointer(MouseEvent::Enter { x, y })
+    pub fn new_pointer_enter_event(row: u32, col: u32) -> Self {
+        Self::Pointer(MouseEvent::Enter { row, col })
     }
 
     /// Create a pointer leave event.
@@ -204,10 +204,10 @@ pub struct KeyEvent {
 #[derive(Debug, Clone, PartialEq)]
 pub enum MouseEvent {
     /// Mouse moved to a specific position.
-    Motion { x: f64, y: f64 },
+    Motion { row: u32, col: u32 },
 
     /// Pointer entered the window at a position.
-    Enter { x: f64, y: f64 },
+    Enter { row: u32, col: u32 },
 
     /// Pointer left the window.
     Leave,

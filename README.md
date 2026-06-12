@@ -14,7 +14,7 @@ Build terminal-themed wayland layer shell applications with Rust. Powered by [Ra
 **Raclettui** allows you to create windows using wayland layer shell protocol and implements the [Ratatui] Backend trait to draw terminal style UIs.
 Layer shell protocol is usually used to create menus, bars and lockscreens.
 This project is still under active development. Expect bugs and breaking changes. However, it works if you would like to try it out.
-It has cpu and wgpu rendering backends. This library was developped to cook a UI for my project as no UI libraries in the rust ecosystem implementing the layer shell protocol were to my liking.
+It uses [beamterm-core] crate as terminal renderer. This library was developped to cook a UI for my project as no UI libraries in the rust ecosystem implementing the layer shell protocol were to my liking.
 
 ## Quickstart
 
@@ -26,64 +26,7 @@ Add **Raclettui** as a dependency in your `Cargo.toml`:
 cargo add raclettui
 ```
 
-Here is a minimal example:
-
-```rust no_run
-
-    use raclettui::{
-        WindowBuilder,
-        layer::{Anchor, Layer, KeyboardInteractivity},
-        events::{WindowEvent, KeyCode},
-    };
-    use ratatui::{
-        Terminal,
-        border,
-        style::{Style, Styled},
-        widgets::{Block, Paragraph}
-    };
-
-    fn main(){
-
-        let window = WindowBuilder::new()
-            .set_namespace("example")
-            .set_width(300)
-            .set_height(300)
-            .set_layer(Layer::Top)
-            .set_anchor(Anchor::Top)
-            .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
-            .set_font_path("fonts/Some-Mono-Font.ttf")
-            .set_font_size(18.)
-            .bg_alpha(0.5)
-            .init_wgpu();
-
-        let events = window.get_event_queue();
-        let mut terminal = Terminal::new(window).unwrap();
-
-        'app_loop: loop{
-
-            terminal.draw(|f| {
-                let size = f.area();
-                let paragraph = Paragraph::new("Hello World")
-                    .block(
-                        Block::new()
-                        .borders(border!(TOP, BOTTOM, RIGHT, LEFT))
-                    )
-                    .set_style(Style::new().fg(ratatui::style::Color::Red).bg(ratatui::style::Color::Blue));
-                f.render_widget(paragraph, size);
-            }).unwrap();
-
-            for ev in events.drain() {
-                if let WindowEvent::Keyboard(key_event) = ev {
-                    match key_event.code {
-                        KeyCode::Char('q') => break 'app_loop,
-                        _ => {}
-                    }
-
-                }
-            }
-        }
-    }
-```
+Checkout examples/hello.rs for a minimal example.
 
 ## Demo
 Converting the bluetui app interface in to a layer shell window is as simple as switching the backend.
@@ -104,6 +47,7 @@ Thanks to [Ratatui] for providing the core UI components.
 
 [Ratatui]: https://ratatui.rs
 [Ratzilla]: https://github.com/ratatui/ratzilla
+[beamterm-core]: https://github.com/junkdog/beamterm
 
 ## Contributing
 

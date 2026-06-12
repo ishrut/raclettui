@@ -1,11 +1,7 @@
-use std::{fs::File, os::unix::io::AsFd};
-
-use tempfile::tempfile;
 use wayland_client::{
     Connection, Dispatch, QueueHandle, WEnum, delegate_noop,
     protocol::{
-        wl_buffer, wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_seat,
-        wl_shm, wl_shm_pool, wl_surface,
+        wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_surface,
     },
 };
 
@@ -21,9 +17,9 @@ use crate::{
     Error,
 };
 
-pub struct CpuWaylandState {
-
-    // builder variables to configure window
+// holds wayland states
+pub struct WaylandState {
+    // surface creation objects
     layer: zwlr_layer_shell_v1::Layer,
     namespace: String,
     anchors: Vec<zwlr_layer_surface_v1::Anchor>,
@@ -32,67 +28,58 @@ pub struct CpuWaylandState {
     exclusive_edge: Option<zwlr_layer_surface_v1::Anchor>,
     keyboard_interactivity: Option<zwlr_layer_surface_v1::KeyboardInteractivity>,
 
-    // wayland objects
     compositor: Option<wl_compositor::WlCompositor>,
-    shm: Option<wl_shm::WlShm>,
     layer_shell: Option<ZwlrLayerShellV1>,
 
-    pub surface: Option<wl_surface::WlSurface>,
+    surface: Option<wl_surface::WlSurface>,
     layer_surface: Option<ZwlrLayerSurfaceV1>,
 
-    pool: Option<wl_shm_pool::WlShmPool>,
-    pub buffer: Option<wl_buffer::WlBuffer>,
-    pub file: Option<File>,
+    surface_configured: bool,
+    frame_callback: Option<wl_callback::WlCallback>,
+    needs_redraw: bool,
 
-    pub surface_configured: bool,
-    pub frame_callback: Option<wl_callback::WlCallback>,
-    pub needs_redraw: bool,
+    window_width: u32,
+    window_height: u32,
 
-    pub window_width: u32,
-    pub window_height: u32,
-
+    // keyboard and mouse events related objects
     seat: Option<wl_seat::WlSeat>,
     keyboard: Option<wl_keyboard::WlKeyboard>,
     pointer: Option<wl_pointer::WlPointer>,
 
-    pub events: WindowEventQueue,
+    events: WindowEventQueue,
     keymap: Option<xkb::Keymap>,
     keymap_state: Option<xkb::State>,
+
+    // Grid cell width and height
+    grid_dims: Option<(i32, i32)>,
 }
 
-impl CpuWaylandState {
+impl WaylandState {
     pub fn new(builder: &WindowBuilder) -> Self {
-        let window_width = builder.width;
-        let window_height = builder.height;
-
         Self {
-            layer: builder.layer,
-            exclusive_zone: builder.exclusive_zone,
-            exclusive_edge: builder.exclusive_edge,
-            margins: builder.margin,
-            namespace: builder.namespace.clone(),
-            keyboard_interactivity: builder.keyboard_interactivity,
             anchors: builder.anchors.clone(),
-
+            keyboard_interactivity: builder.keyboard_interactivity.clone(),
+            exclusive_zone: builder.exclusive_zone.clone(),
+            exclusive_edge: builder.exclusive_edge.clone(),
+            margins: builder.margin.clone(),
+            layer: builder.layer.clone(),
+            namespace: builder.namespace.clone(),
             compositor: None,
-            shm: None,
             layer_shell: None,
             surface: None,
             layer_surface: None,
-            pool: None,
-            buffer: None,
-            file: None,
             surface_configured: false,
             frame_callback: None,
             needs_redraw: true,
-            window_width,
-            window_height,
+            window_width: builder.width,
+            window_height: builder.height,
             seat: None,
             keyboard: None,
             pointer: None,
             events: WindowEventQueue::new(),
             keymap: None,
             keymap_state: None,
+            grid_dims: None,
         }
     }
 
@@ -104,7 +91,11 @@ impl CpuWaylandState {
         self.needs_redraw
     }
 
-    pub fn set_frame_callback(&mut self, qh: &QueueHandle<CpuWaylandState >) -> Result<(), Error> {
+    pub fn set_redraw(&mut self, redraw: bool) {
+        self.needs_redraw = redraw;
+    }
+
+    pub fn set_frame_callback(&mut self, qh: &QueueHandle<WaylandState >) -> Result<(), Error> {
         if let Some(surface) = &self.surface {
             self.frame_callback = Some(surface.frame(&qh, ()));
         } else {
@@ -112,10 +103,34 @@ impl CpuWaylandState {
         }
         Ok(())
     }
+
+    pub fn surface(&self) -> Option<&wl_surface::WlSurface> {
+        self.surface.as_ref()
+    }
+
+    pub fn layer_surface(&self) -> Option<&zwlr_layer_surface_v1::ZwlrLayerSurfaceV1> {
+        self.layer_surface.as_ref()
+    }
+
+    pub fn events(&self) -> WindowEventQueue {
+        self.events.clone()
+    }
+
+    pub fn width(&self) -> u32 {
+        self.window_width
+    }
+
+    pub fn height(&self) -> u32 {
+        self.window_height
+    }
+
+    pub(crate) fn set_grid_dims(&mut self, width: i32, height: i32) {
+        self.grid_dims = Some((width, height));
+    }
 }
 
 // registry handler
-impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
+impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
     fn event(
         state: &mut Self,
         registry: &wl_registry::WlRegistry,
@@ -134,40 +149,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
                 "wl_compositor" => {
                     let compositor =
                         registry.bind::<wl_compositor::WlCompositor, _, _>(name, version, qh, ());
+                    state.compositor = Some(compositor.clone());
 
                     let surface = compositor.create_surface(qh, ());
                     state.surface = Some(surface);
-                    state.compositor = Some(compositor);
-                }
-                "wl_shm" => {
-                    let shm = registry.bind::<wl_shm::WlShm, _, _>(name, version, qh, ());
-
-                    let file = match tempfile() {
-                        Ok(file) => file,
-                        Err(e) => panic!("src/cpu/wayland.rs unable to create temp file: {}", e),
-                    };
-                    let size = (state.window_width * state.window_height * 4) as i32;
-
-                    match file.set_len(size as u64) {
-                        Ok(_) => {},
-                        Err(e) => panic!("src/cpu/wayland.rs unable to set len of file: {}", e),
-                    }
-
-                    let pool = shm.create_pool(file.as_fd(), size, qh, ());
-                    let buffer = pool.create_buffer(
-                        0,
-                        state.window_width as i32,
-                        state.window_height as i32,
-                        (state.window_width * 4) as i32,
-                        wl_shm::Format::Argb8888,
-                        qh,
-                        (),
-                    );
-
-                    state.pool = Some(pool);
-                    state.buffer = Some(buffer);
-                    state.file = Some(file);
-                    state.shm = Some(shm);
                 }
                 "zwlr_layer_shell_v1" => {
                     let layer_shell =
@@ -178,6 +163,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
                         None => panic!("src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface")
                     };
 
+                    // configuring layer shell surface
                     let layer_surface = layer_shell.get_layer_surface(
                         surface,
                         None,
@@ -203,10 +189,10 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
                         layer_surface.set_exclusive_edge(edge);
                     }
 
+                    state.layer_shell = Some(layer_shell);
                     state.layer_surface = Some(layer_surface);
                     // initial commit without buffer attached
                     surface.commit();
-                    state.layer_shell = Some(layer_shell);
                 }
                 "wl_seat" => {
                     let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qh, ());
@@ -219,7 +205,7 @@ impl Dispatch<wl_registry::WlRegistry, ()> for CpuWaylandState {
 }
 
 // acknowledge configure event
-impl Dispatch<ZwlrLayerSurfaceV1, ()> for CpuWaylandState {
+impl Dispatch<ZwlrLayerSurfaceV1, ()> for WaylandState {
     fn event(
         state: &mut Self,
         layer_surface: &ZwlrLayerSurfaceV1,
@@ -243,7 +229,7 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for CpuWaylandState {
 }
 
 // frame_callback for redraw when compositor ready
-impl Dispatch<wl_callback::WlCallback, ()> for CpuWaylandState {
+impl Dispatch<wl_callback::WlCallback, ()> for WaylandState {
     fn event(
         state: &mut Self,
         _: &wl_callback::WlCallback,
@@ -258,7 +244,9 @@ impl Dispatch<wl_callback::WlCallback, ()> for CpuWaylandState {
     }
 }
 
-impl Dispatch<wl_seat::WlSeat, ()> for CpuWaylandState {
+// Gets keyboard and pointer proxies
+// No touch support yet
+impl Dispatch<wl_seat::WlSeat, ()> for WaylandState {
     fn event(
         state: &mut Self,
         seat: &wl_seat::WlSeat,
@@ -282,7 +270,8 @@ impl Dispatch<wl_seat::WlSeat, ()> for CpuWaylandState {
     }
 }
 
-impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
+// configures keymap and handles keyboard events
+impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
     fn event(
         own_state: &mut Self,
         _proxy: &wl_keyboard::WlKeyboard,
@@ -333,7 +322,6 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
                         xkb::KEYMAP_COMPILE_NO_FLAGS,
                     )
                 };
-
                 if let Ok(keymap) = keymap_result {
                     own_state.keymap = keymap;
                 } else if let Err(e) = keymap_result {
@@ -351,7 +339,8 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for CpuWaylandState {
     }
 }
 
-impl Dispatch<wl_pointer::WlPointer, ()> for CpuWaylandState {
+// handles pointer events
+impl Dispatch<wl_pointer::WlPointer, ()> for WaylandState {
     fn event(
         own_state: &mut Self,
         _proxy: &wl_pointer::WlPointer,
@@ -366,16 +355,24 @@ impl Dispatch<wl_pointer::WlPointer, ()> for CpuWaylandState {
                 surface_y,
                 ..
             } => {
-                let event = WindowEvent::new_pointer_enter_event(surface_x, surface_y);
-                own_state.events.push(event);
+                if let Some((cell_width, cell_height)) = own_state.grid_dims {
+                    let row = (surface_y / cell_height as f64).floor() as u32;
+                    let col = (surface_x / cell_width as f64).floor() as u32;
+                    let event = WindowEvent::new_pointer_enter_event(row , col);
+                    own_state.events.push(event);
+                }
             }
             wl_pointer::Event::Motion {
                 surface_x,
                 surface_y,
                 ..
             } => {
-                let event = WindowEvent::new_pointer_motion_event(surface_x, surface_y);
-                own_state.events.push(event);
+                if let Some((cell_width, cell_height)) = own_state.grid_dims {
+                    let row = (surface_y / cell_height as f64).floor() as u32;
+                    let col = (surface_x / cell_width as f64).floor() as u32;
+                    let event = WindowEvent::new_pointer_enter_event(row , col);
+                    own_state.events.push(event);
+                }
             }
             wl_pointer::Event::Leave { .. } => {
                 let event = WindowEvent::new_pointer_leave_event();
@@ -414,9 +411,6 @@ impl Dispatch<wl_pointer::WlPointer, ()> for CpuWaylandState {
 }
 
 // ignore unused
-delegate_noop!(CpuWaylandState: ignore wl_compositor::WlCompositor);
-delegate_noop!(CpuWaylandState: ignore wl_surface::WlSurface);
-delegate_noop!(CpuWaylandState: ignore wl_shm::WlShm);
-delegate_noop!(CpuWaylandState: ignore wl_shm_pool::WlShmPool);
-delegate_noop!(CpuWaylandState: ignore wl_buffer::WlBuffer);
-delegate_noop!(CpuWaylandState: ignore ZwlrLayerShellV1);
+delegate_noop!(WaylandState : ignore wl_compositor::WlCompositor);
+delegate_noop!(WaylandState : ignore wl_surface::WlSurface);
+delegate_noop!(WaylandState : ignore ZwlrLayerShellV1);

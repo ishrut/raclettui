@@ -1,6 +1,6 @@
 [package]
 name = "raclettui"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2024"
 description = "Build terminal-themed wayland layer shell applications with Rust."
 license = "MIT OR Apache-2.0"
@@ -13,20 +13,17 @@ categories = ["graphics", "rendering", "gui"]
 authors = ["Ishrut"]
 
 [dependencies]
-ab_glyph = "0.2.32"
-bytemuck = "1.25.0"
-fontdb = "0.23.0"
-fontdue = "0.9.3"
-glyphon = "0.10.0"
-khronos-egl = { version = "6.0.0", features = ["static"] }
-pollster = "0.4.0"
+beamterm-core = "1.0.0"
+env_logger = "0.11.9"
+glow = "0.17.0"
+glutin = "0.32.3"
 ratatui-core = "0.1.0"
 raw-window-handle = "0.6.2"
-tempfile = "3.26.0"
 wayland-backend = { version = "0.3.12", features = ["client_system", "raw-window-handle"] }
 wayland-client = "0.31.12"
+wayland-egl = "0.32.11"
 wayland-protocols-wlr = { version = "0.3.10", features = ["client"] }
-wgpu = { version = "28.0.0", features = ["vulkan"] }
+tempfile = "3.26.0"
 xkbcommon = "0.9.0"
 
 [dev-dependencies]
