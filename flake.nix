@@ -37,6 +37,7 @@
 
             # wayland packages
             wayland
+            egl-wayland
 
             #keyboard events
             libevdev
@@ -50,6 +51,14 @@
 
           nativeBuildInputs = [
             pkg-config
+          ];
+
+          LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
+            pkgs.wayland
+            pkgs.libxkbcommon
+            pkgs.mesa
+            pkgs.vulkan-loader
+            pkgs.libglvnd
           ];
 
           RUST_SRC_PATH = rustPlatform.rustLibSrc;

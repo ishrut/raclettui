@@ -22,7 +22,7 @@ pub struct WaylandState {
     // surface creation objects
     layer: zwlr_layer_shell_v1::Layer,
     namespace: String,
-    anchors: Vec<zwlr_layer_surface_v1::Anchor>,
+    anchors: Option<zwlr_layer_surface_v1::Anchor>,
     exclusive_zone: Option<i32>,
     margins: Option<(i32, i32, i32, i32)>,
     exclusive_edge: Option<zwlr_layer_surface_v1::Anchor>,
@@ -172,8 +172,8 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
                         qh,
                         (),
                     );
-                    for anchor in &state.anchors {
-                        layer_surface.set_anchor(*anchor);
+                    if let Some(anchor) = state.anchors {
+                        layer_surface.set_anchor(anchor);
                     }
                     layer_surface.set_size(state.window_width, state.window_height);
                     if let Some(zone) = state.exclusive_zone {

@@ -6,7 +6,7 @@ pub struct WindowBuilder {
     pub namespace: String,
     pub width: u32,
     pub height: u32,
-    pub anchors: Vec<Anchor>,
+    pub anchors: Option<Anchor>,
     pub margin: Option<(i32, i32, i32, i32)>,
     pub exclusive_zone: Option<i32>,
     pub keyboard_interactivity: Option<KeyboardInteractivity>,
@@ -23,7 +23,7 @@ impl std::default::Default for WindowBuilder {
             namespace: "".to_string(),
             width: 0,
             height: 0,
-            anchors: Vec::<Anchor>::new(),
+            anchors: None,
             margin: None,
             exclusive_zone: None,
             keyboard_interactivity: None,
@@ -52,12 +52,7 @@ impl WindowBuilder {
     }
 
     pub fn set_anchor(mut self, anchor: Anchor) -> Self {
-        self.anchors.push(anchor);
-        self
-    }
-
-    pub fn set_anchors(mut self, anchors: Vec<Anchor>) -> Self {
-        self.anchors.extend(anchors.iter());
+        self.anchors = Some(anchor);
         self
     }
 

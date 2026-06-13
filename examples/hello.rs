@@ -16,7 +16,7 @@ fn main() {
         .set_width(300)
         .set_height(300)
         .set_layer(Layer::Overlay)
-        .set_anchor(Anchor::Top)
+        .set_anchor(Anchor::Top | Anchor::Right)
         .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
         .set_bg_alpha(0.5)
         .init()
