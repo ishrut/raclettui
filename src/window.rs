@@ -107,8 +107,8 @@ impl WindowBuilder {
 
         let attrs = SurfaceAttributesBuilder::<WindowSurface>::new().build(
             window_handle,
-            NonZeroU32::new(self.width).unwrap(),
-            NonZeroU32::new(self.height).unwrap(),
+            NonZeroU32::new(state.width()).unwrap(),
+            NonZeroU32::new(state.height()).unwrap(),
         );
 
         let surface = unsafe {
@@ -142,7 +142,7 @@ impl WindowBuilder {
         let mut grid = TerminalGrid::new(
             &gl,
             atlas.into(),
-            (self.width as i32, self.height as i32),
+            (state.width() as i32, state.height() as i32),
             1.0,
             &GlslVersion::Gl330,
         )
