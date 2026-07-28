@@ -5,6 +5,11 @@ pub enum Error {
     WaylandSurfaceConfigurationError,
     WaylandSurfacePtrNull,
     WaylandDisplayPtrNull,
+    GlutinError(glutin::error::Error),
+    GlutinDisplayNull,
+    ZeroWindowHeight,
+    ZeroWindowWidth,
+    ZeroSwapInterval,
     IoError(std::io::Error),
     WaylandFrameCallbackError,
     RatatuiBackendError,
@@ -12,7 +17,6 @@ pub enum Error {
     UnsupportedBackendFeature,
     OutOfBounds,
     CharWidthError,
-    GlutinError(glutin::error::Error),
     BeamTermError(beamterm_core::Error),
 }
 
@@ -26,6 +30,11 @@ impl std::fmt::Display for Error {
             Self::WaylandSurfaceConfigurationError => write!(f, "wayland surface not configured"),
             Self::WaylandSurfacePtrNull => write!(f, "wayland surface pointer is null"),
             Self::WaylandDisplayPtrNull => write!(f, "wayland display pointer is null"),
+            Self::GlutinError(e) => write!(f, "{}", e),
+            Self::GlutinDisplayNull => write!(f,"glutin display is null"),
+            Self::ZeroWindowHeight => write!(f, "window height is zero"),
+            Self::ZeroWindowWidth => write!(f, "window width is zero"),
+            Self::ZeroSwapInterval => write!(f, "swap interval is zero"),
             Self::IoError(e) => write!(f, "{}", e),
             Self::WaylandFrameCallbackError => {
                 write!(f, "unable to set wayland frame callback, surface dropped?")
@@ -35,7 +44,6 @@ impl std::fmt::Display for Error {
             Self::UnsupportedBackendFeature => write!(f, "unsupported backend feature"),
             Self::OutOfBounds => write!(f, "setting character out of bounds"),
             Self::CharWidthError => write!(f, "unable to get font metrics to measure cell width"),
-            Self::GlutinError(e) => write!(f, "{}", e),
             Self::BeamTermError(e) => write!(f, "{}", e),
         }
     }

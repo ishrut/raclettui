@@ -43,6 +43,7 @@
             libevdev
             libxkbcommon
             libxcb
+            fontconfig
 
             # Clang / bindgen
             llvmPackages.clang
