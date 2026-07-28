@@ -3,14 +3,12 @@
 use raclettui::{KeyCode, KeyboardInteractivity, WindowBuilder, WindowEvent};
 
 use ratatui::{
-    Terminal,
-    border,
-    style::{Style, Styled, Color},
-    widgets::{Block, Paragraph}
+    Terminal, border,
+    style::{Color, Style, Styled},
+    widgets::{Block, Paragraph},
 };
 
 fn main() {
-
     let window_builder = WindowBuilder {
         namespace: "example".to_string(),
         font_size: 16.,
@@ -25,20 +23,15 @@ fn main() {
     let mut terminal = Terminal::new(window).unwrap();
 
     loop {
-        terminal.draw(|f| {
-            let size = f.area();
-            let paragraph = Paragraph::new("Hello  World")
-                .block(
-                    Block::new()
-                    .borders(border!(TOP, BOTTOM, RIGHT, LEFT))
-                )
-                .set_style(
-                    Style::new()
-                        .fg(Color::Red)
-                        .bg(Color::Blue)
-                );
-            f.render_widget(paragraph, size);
-        }).unwrap();
+        terminal
+            .draw(|f| {
+                let size = f.area();
+                let paragraph = Paragraph::new("Hello  World")
+                    .block(Block::new().borders(border!(TOP, BOTTOM, RIGHT, LEFT)))
+                    .set_style(Style::new().fg(Color::Red).bg(Color::Blue));
+                f.render_widget(paragraph, size);
+            })
+            .unwrap();
 
         for ev in events.drain() {
             if let WindowEvent::Keyboard(key_event) = ev {
@@ -48,6 +41,5 @@ fn main() {
                 }
             }
         }
-
     }
 }

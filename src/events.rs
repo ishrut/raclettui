@@ -14,7 +14,7 @@ impl WindowEventQueue {
 
     pub fn clone(&self) -> Self {
         Self {
-            inner: self.inner.clone()
+            inner: self.inner.clone(),
         }
     }
 
@@ -29,17 +29,13 @@ impl WindowEventQueue {
     pub fn is_empty(&self) -> bool {
         self.inner.borrow().is_empty()
     }
-
 }
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum WindowEvent {
     Keyboard(KeyEvent),
     Pointer(MouseEvent),
-    Resize {
-        width: u32,
-        height: u32
-    },
+    Resize { width: u32, height: u32 },
 }
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]

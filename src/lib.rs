@@ -1,7 +1,7 @@
 pub mod error;
-pub mod window;
 pub mod events;
 mod ratatui_backend;
+pub mod window;
 
 pub mod layer_shell {
     pub use wayland_protocols_wlr::layer_shell::v1::client::{
@@ -10,8 +10,6 @@ pub mod layer_shell {
     };
 }
 
-pub use window::WindowBuilder;
-pub use layer_shell::{Layer, Anchor, KeyboardInteractivity};
 pub use events::*;
-
-
+pub use layer_shell::{Anchor, KeyboardInteractivity, Layer};
+pub use window::WindowBuilder;

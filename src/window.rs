@@ -1,19 +1,19 @@
+use crate::error::Error;
+use crate::events::{
+    AxisCode, ButtonCode, KeyCode, KeyEvent, MouseEvent, WindowEvent, WindowEventQueue,
+};
+use glutin::{context::NotCurrentGlContext, display::GlDisplay, prelude::GlSurface};
 use wayland_client::{
     Connection, Dispatch, Proxy, WEnum, delegate_noop,
     protocol::{
-        wl_compositor, wl_surface, wl_callback, wl_seat, wl_keyboard, wl_pointer, wl_registry,
-    }
+        wl_callback, wl_compositor, wl_keyboard, wl_pointer, wl_registry, wl_seat, wl_surface,
+    },
 };
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::{self, ZwlrLayerShellV1, Layer},
-    zwlr_layer_surface_v1::{self, ZwlrLayerSurfaceV1, Anchor, KeyboardInteractivity},
+    zwlr_layer_shell_v1::{self, Layer, ZwlrLayerShellV1},
+    zwlr_layer_surface_v1::{self, Anchor, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
 use xkbcommon::xkb;
-use glutin::{
-    display::GlDisplay, prelude::GlSurface, context::NotCurrentGlContext
-};
-use crate::error::Error;
-use crate::events::{WindowEventQueue, WindowEvent, MouseEvent, KeyEvent, AxisCode, KeyCode, ButtonCode};
 
 const PIXEL_RATIO: f32 = 1.0;
 
@@ -113,7 +113,6 @@ impl WindowBuilder {
             font_size: 0.,
             bg_alpha: 0.,
         }
-
     }
 
     fn init_wayland_state(&self) -> WaylandState {
@@ -142,12 +141,10 @@ impl WindowBuilder {
             keymap_state: None,
             grid_dims: None,
         }
-
     }
 
     pub fn build(self) -> Result<LayerShellWindow, Error> {
-        let wl_conn = Connection::connect_to_env()
-            .map_err(|e| Error::WaylandConnectError(e))?;
+        let wl_conn = Connection::connect_to_env().map_err(|e| Error::WaylandConnectError(e))?;
         let mut wl_event_queue = wl_conn.new_event_queue();
         let wl_qh = wl_event_queue.handle();
 
@@ -172,12 +169,10 @@ impl WindowBuilder {
         if wl_display_ptr.is_null() {
             return Err(Error::WaylandDisplayPtrNull);
         }
-        let display_ptr = unsafe {
-            core::ptr::NonNull::new_unchecked(wl_display_ptr)
-        };
+        let display_ptr = unsafe { core::ptr::NonNull::new_unchecked(wl_display_ptr) };
 
         let raw_display_handle = raw_window_handle::RawDisplayHandle::Wayland(
-            raw_window_handle::WaylandDisplayHandle::new(display_ptr)
+            raw_window_handle::WaylandDisplayHandle::new(display_ptr),
         );
         let gl_display = unsafe {
             glutin::display::Display::new(
@@ -214,7 +209,7 @@ impl WindowBuilder {
         // let gl_surface_raw = glutin::surface::RawSurface::Egl(surface_ptr);
 
         let window_handle = raw_window_handle::RawWindowHandle::Wayland(
-            raw_window_handle::WaylandWindowHandle::new(nonnull_surface_ptr)
+            raw_window_handle::WaylandWindowHandle::new(nonnull_surface_ptr),
         );
 
         let context_attrs = glutin::context::ContextAttributesBuilder::new()
@@ -229,12 +224,15 @@ impl WindowBuilder {
                 .map_err(|e| Error::GlutinError(e))?
         };
 
-        let attrs = glutin::surface::SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new()
-            .build(
-                window_handle,
-                std::num::NonZeroU32::new(wl_state.window_width).ok_or(Error::ZeroWindowWidth)?,
-               std::num::NonZeroU32::new(wl_state.window_height).ok_or(Error::ZeroWindowHeight)?,
-            );
+        let attrs =
+            glutin::surface::SurfaceAttributesBuilder::<glutin::surface::WindowSurface>::new()
+                .build(
+                    window_handle,
+                    std::num::NonZeroU32::new(wl_state.window_width)
+                        .ok_or(Error::ZeroWindowWidth)?,
+                    std::num::NonZeroU32::new(wl_state.window_height)
+                        .ok_or(Error::ZeroWindowHeight)?,
+                );
 
         let gl_surface = unsafe {
             gl_display
@@ -247,13 +245,14 @@ impl WindowBuilder {
             .map_err(|e| Error::GlutinError(e))?;
 
         // TODO: swap interval to determine
-        gl_surface.set_swap_interval(
-            &gl_context,
-            glutin::surface::SwapInterval::Wait(
-                std::num::NonZeroU32::new(1).ok_or(Error::ZeroSwapInterval)?
-            ),
-        )
-        .map_err(|e| Error::GlutinError(e))?;
+        gl_surface
+            .set_swap_interval(
+                &gl_context,
+                glutin::surface::SwapInterval::Wait(
+                    std::num::NonZeroU32::new(1).ok_or(Error::ZeroSwapInterval)?,
+                ),
+            )
+            .map_err(|e| Error::GlutinError(e))?;
 
         let gl = unsafe {
             glow::Context::from_loader_function_cstr(|name| gl_display.get_proc_address(name))
@@ -262,23 +261,16 @@ impl WindowBuilder {
 
         let font_name = match self.font_name {
             Some(font_name) => font_name,
-            None => &self.get_default_font()
+            None => &self.get_default_font(),
         };
 
         let effective_font_size = self.font_size * PIXEL_RATIO;
-        let rasterizer = beamterm_core::NativeGlyphRasterizer::new(
-            &[font_name],
-            effective_font_size
-        )
-        .map_err(|e| Error::BeamTermError(e))?;
-        let atlas = beamterm_core::gl::DynamicFontAtlas::new(
-            &gl,
-            rasterizer,
-            self.font_size,
-            PIXEL_RATIO
-        )
-        .map_err(|e| Error::BeamTermError(e))?;
-
+        let rasterizer =
+            beamterm_core::NativeGlyphRasterizer::new(&[font_name], effective_font_size)
+                .map_err(|e| Error::BeamTermError(e))?;
+        let atlas =
+            beamterm_core::gl::DynamicFontAtlas::new(&gl, rasterizer, self.font_size, PIXEL_RATIO)
+                .map_err(|e| Error::BeamTermError(e))?;
 
         // TODO: pixel ratio to determine
         let mut grid = beamterm_core::TerminalGrid::new(
@@ -301,7 +293,7 @@ impl WindowBuilder {
             gl,
             grid,
             wayland_state: wl_state,
-            wayland_event_queue: wl_event_queue
+            wayland_event_queue: wl_event_queue,
         };
         layer_shell_window.set_frame_callback()?;
 
@@ -320,7 +312,8 @@ impl LayerShellWindow {
     #[inline]
     fn set_frame_callback(&mut self) -> Result<(), Error> {
         if let Some(surface) = &self.wayland_state.surface {
-            self.wayland_state.frame_callback = Some(surface.frame(&self.wayland_event_queue.handle(), ()));
+            self.wayland_state.frame_callback =
+                Some(surface.frame(&self.wayland_event_queue.handle(), ()));
             Ok(())
         } else {
             Err(Error::WaylandFrameCallbackError)
@@ -335,9 +328,11 @@ impl LayerShellWindow {
 
     // Call this function on a window resize event
     pub fn resize_grid(&mut self, width: u32, height: u32) -> Result<(), Error> {
-        self.grid.resize(&self.gl, (width as i32, height as i32), PIXEL_RATIO)
+        self.grid
+            .resize(&self.gl, (width as i32, height as i32), PIXEL_RATIO)
             .map_err(|e| Error::BeamTermError(e))?;
-        self.wayland_state.grid_dims = Some((self.grid.cell_size().width, self.grid.cell_size().height));
+        self.wayland_state.grid_dims =
+            Some((self.grid.cell_size().width, self.grid.cell_size().height));
         Ok(())
     }
 
@@ -354,22 +349,21 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
         _data: &(),
         _conn: &Connection,
         qhandle: &wayland_client::QueueHandle<Self>,
-    )
-    {
+    ) {
         if let wl_registry::Event::Global {
             name,
             interface,
-            version
-        } = event {
+            version,
+        } = event
+        {
             match interface.as_str() {
                 "wl_compositor" => {
-                    let compositor =
-                        registry.bind::<wl_compositor::WlCompositor, _, _>(
-                            name,
-                            version,
-                            qhandle,
-                            ()
-                        );
+                    let compositor = registry.bind::<wl_compositor::WlCompositor, _, _>(
+                        name,
+                        version,
+                        qhandle,
+                        (),
+                    );
                     let surface = compositor.create_surface(qhandle, ());
 
                     state.compositor = Some(compositor.clone());
@@ -377,16 +371,13 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
                 }
                 "zwlr_layer_shell_v1" => {
                     let layer_shell =
-                        registry.bind::<ZwlrLayerShellV1, _, _>(
-                            name,
-                            version,
-                            qhandle,
-                            ()
-                        );
+                        registry.bind::<ZwlrLayerShellV1, _, _>(name, version, qhandle, ());
 
                     let surface = match &state.surface {
                         Some(surface) => surface,
-                        None => panic!("src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface")
+                        None => panic!(
+                            "src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface"
+                        ),
                     };
 
                     // configuring layer shell surface
@@ -438,9 +429,13 @@ impl Dispatch<ZwlrLayerSurfaceV1, ()> for WaylandState {
         _data: &(),
         _conn: &Connection,
         _qhandle: &wayland_client::QueueHandle<Self>,
-    )
-    {
-        if let zwlr_layer_surface_v1::Event::Configure { serial, width, height } = event {
+    ) {
+        if let zwlr_layer_surface_v1::Event::Configure {
+            serial,
+            width,
+            height,
+        } = event
+        {
             if !state.surface_configured {
                 zwlr_layer_surface_v1.ack_configure(serial);
                 state.window_width = width;
@@ -510,11 +505,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
             wl_keyboard::Event::Key { key, state, .. } => {
                 if let WEnum::Value(key_state) = state {
                     if let Some(keymap_state) = &wl_state.keymap_state {
-                        let window_event = new_keyboard_event(
-                            keymap_state,
-                            key,
-                            key_state as u32,
-                        );
+                        let window_event = new_keyboard_event(keymap_state, key, key_state as u32);
                         wl_state.events.push(window_event);
                     } else {
                         eprintln!("keymap state not configured, cannot get get keyboard event")
@@ -567,7 +558,7 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
 
 #[inline]
 fn new_keyboard_event(keymap_state: &xkb::State, key: u32, value: u32) -> WindowEvent {
-    let keysym = keymap_state.key_get_one_sym(xkb::Keycode::new(key+8));
+    let keysym = keymap_state.key_get_one_sym(xkb::Keycode::new(key + 8));
     let shift = keymap_state.mod_name_is_active(xkb::MOD_NAME_SHIFT, xkb::STATE_MODS_EFFECTIVE);
     let ctrl = keymap_state.mod_name_is_active(xkb::MOD_NAME_CTRL, xkb::STATE_MODS_EFFECTIVE);
     let alt = keymap_state.mod_name_is_active(xkb::MOD_NAME_ALT, xkb::STATE_MODS_EFFECTIVE);
@@ -598,7 +589,7 @@ fn new_keyboard_event(keymap_state: &xkb::State, key: u32, value: u32) -> Window
         xkb::Keysym::F10 => KeyCode::F(10),
         xkb::Keysym::F11 => KeyCode::F(11),
         xkb::Keysym::F12 => KeyCode::F(12),
-        _ =>  {
+        _ => {
             let utf32 = xkb::keysym_to_utf32(keysym);
             if utf32 != 0 {
                 let ch = std::char::from_u32(utf32).unwrap();
@@ -613,7 +604,7 @@ fn new_keyboard_event(keymap_state: &xkb::State, key: u32, value: u32) -> Window
         value,
         shift,
         alt,
-        ctrl
+        ctrl,
     })
 }
 
@@ -659,15 +650,17 @@ impl Dispatch<wl_pointer::WlPointer, ()> for WaylandState {
                 if let WEnum::Value(axis_value) = axis {
                     match axis_value {
                         wl_pointer::Axis::VerticalScroll => {
-                            let event = WindowEvent::Pointer(
-                                MouseEvent::Axis { code: AxisCode::VerticalScroll, value }
-                            );
+                            let event = WindowEvent::Pointer(MouseEvent::Axis {
+                                code: AxisCode::VerticalScroll,
+                                value,
+                            });
                             wl_state.events.push(event);
                         }
                         wl_pointer::Axis::HorizontalScroll => {
-                            let event = WindowEvent::Pointer(
-                                MouseEvent::Axis { code: AxisCode::HorizontalScroll, value }
-                            );
+                            let event = WindowEvent::Pointer(MouseEvent::Axis {
+                                code: AxisCode::HorizontalScroll,
+                                value,
+                            });
                             wl_state.events.push(event);
                         }
                         _ => {}
@@ -693,7 +686,10 @@ fn new_pointer_button_event(code: u32, value: u32) -> WindowEvent {
         274 => ButtonCode::Middle,
         _ => ButtonCode::Unknown,
     };
-    WindowEvent::Pointer(MouseEvent::Button { code: button_code, value })
+    WindowEvent::Pointer(MouseEvent::Button {
+        code: button_code,
+        value,
+    })
 }
 
 delegate_noop!(WaylandState : ignore wl_compositor::WlCompositor);

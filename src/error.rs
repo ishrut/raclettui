@@ -31,7 +31,7 @@ impl std::fmt::Display for Error {
             Self::WaylandSurfacePtrNull => write!(f, "wayland surface pointer is null"),
             Self::WaylandDisplayPtrNull => write!(f, "wayland display pointer is null"),
             Self::GlutinError(e) => write!(f, "{}", e),
-            Self::GlutinDisplayNull => write!(f,"glutin display is null"),
+            Self::GlutinDisplayNull => write!(f, "glutin display is null"),
             Self::ZeroWindowHeight => write!(f, "window height is zero"),
             Self::ZeroWindowWidth => write!(f, "window width is zero"),
             Self::ZeroSwapInterval => write!(f, "swap interval is zero"),

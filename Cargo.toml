@@ -1,6 +1,6 @@
 [package]
 name = "raclettui"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 description = "Build terminal-themed wayland layer shell applications with Rust."
 license = "MIT OR Apache-2.0"
@@ -26,7 +26,6 @@ wayland-protocols-wlr = { version = "0.3.10", features = ["client"] }
 tempfile = "3.26.0"
 xkbcommon = "0.9.0"
 fontconfig = "0.11.0"
-
 
 [dev-dependencies]
 ratatui = "0.30.0"

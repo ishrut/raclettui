@@ -1,11 +1,11 @@
-use super::window::LayerShellWindow;
 use super::error::Error;
+use super::window::LayerShellWindow;
 use ratatui_core::backend::Backend;
 
-use glutin::prelude::GlSurface;
 use beamterm_core::{FontStyle, GlyphEffect};
-use ratatui_core::style::Modifier;
+use glutin::prelude::GlSurface;
 use ratatui_core::style::Color;
+use ratatui_core::style::Modifier;
 
 pub trait RatatuiColorToU32 {
     fn to_u32(&self) -> u32;
@@ -42,10 +42,22 @@ impl RatatuiColorToU32 for Color {
 fn ansi256_to_rgb(i: u8) -> (u8, u8, u8) {
     if i < 16 {
         const ANSI: [(u8, u8, u8); 16] = [
-            (0, 0, 0),       (128, 0, 0),   (0, 128, 0),   (128, 128, 0),
-            (0, 0, 128),     (128, 0, 128), (0, 128, 128), (192, 192, 192),
-            (128, 128, 128), (255, 0, 0),   (0, 255, 0),   (255, 255, 0),
-            (0, 0, 255),     (255, 0, 255), (0, 255, 255), (255, 255, 255),
+            (0, 0, 0),
+            (128, 0, 0),
+            (0, 128, 0),
+            (128, 128, 0),
+            (0, 0, 128),
+            (128, 0, 128),
+            (0, 128, 128),
+            (192, 192, 192),
+            (128, 128, 128),
+            (255, 0, 0),
+            (0, 255, 0),
+            (255, 255, 0),
+            (0, 0, 255),
+            (255, 0, 255),
+            (0, 255, 255),
+            (255, 255, 255),
         ];
         ANSI[i as usize]
     } else if i < 232 {
@@ -92,14 +104,14 @@ impl Backend for LayerShellWindow {
     type Error = Error;
     fn draw<'a, I>(&mut self, content: I) -> Result<(), Self::Error>
     where
-        I: Iterator<Item = (u16, u16, &'a ratatui_core::buffer::Cell)>
+        I: Iterator<Item = (u16, u16, &'a ratatui_core::buffer::Cell)>,
     {
         loop {
             self.wayland_event_queue
                 .blocking_dispatch(&mut self.wayland_state)
                 .map_err(|e| Error::WaylandDispatchError(e))?;
             if self.wayland_state.needs_redraw {
-                break
+                break;
             }
         }
 
@@ -117,7 +129,8 @@ impl Backend for LayerShellWindow {
         self.grid
             .update_cells_by_position(cell_datas)
             .map_err(|e| Error::BeamTermError(e))?;
-        self.grid.flush_cells(&self.gl)
+        self.grid
+            .flush_cells(&self.gl)
             .map_err(|e| Error::BeamTermError(e))?;
 
         self.gl_state.viewport(
@@ -155,7 +168,7 @@ impl Backend for LayerShellWindow {
         let grid_size = self.size()?;
         let pixel_size = ratatui_core::layout::Size::new(
             self.wayland_state.window_width as u16,
-            self.wayland_state.window_height as u16
+            self.wayland_state.window_height as u16,
         );
         let window_size = ratatui_core::backend::WindowSize {
             columns_rows: grid_size,
@@ -166,7 +179,10 @@ impl Backend for LayerShellWindow {
     fn clear(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn clear_region(&mut self, _clear_type: ratatui_core::backend::ClearType) -> Result<(), Self::Error> {
+    fn clear_region(
+        &mut self,
+        _clear_type: ratatui_core::backend::ClearType,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
     fn get_cursor_position(&mut self) -> Result<ratatui_core::layout::Position, Self::Error> {
@@ -185,7 +201,10 @@ impl Backend for LayerShellWindow {
     fn show_cursor(&mut self) -> Result<(), Self::Error> {
         Ok(())
     }
-    fn set_cursor_position<P: Into<ratatui_core::layout::Position>>(&mut self, _position: P) -> Result<(), Self::Error> {
+    fn set_cursor_position<P: Into<ratatui_core::layout::Position>>(
+        &mut self,
+        _position: P,
+    ) -> Result<(), Self::Error> {
         Ok(())
     }
     fn set_cursor(&mut self, _x: u16, _y: u16) -> Result<(), Self::Error> {
