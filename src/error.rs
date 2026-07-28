@@ -3,10 +3,13 @@ pub enum Error {
     WaylandConnectError(wayland_client::ConnectError),
     WaylandDispatchError(wayland_client::DispatchError),
     WaylandSurfaceConfigurationError,
+    WaylandLayerShellError,
     WaylandSurfacePtrNull,
     WaylandDisplayPtrNull,
     GlutinError(glutin::error::Error),
     GlutinDisplayNull,
+    NoFontConfig,
+    FontConfigError(fontconfig::FontconfigError),
     ZeroWindowHeight,
     ZeroWindowWidth,
     ZeroSwapInterval,
@@ -45,6 +48,9 @@ impl std::fmt::Display for Error {
             Self::OutOfBounds => write!(f, "setting character out of bounds"),
             Self::CharWidthError => write!(f, "unable to get font metrics to measure cell width"),
             Self::BeamTermError(e) => write!(f, "{}", e),
+            Self::NoFontConfig => write!(f,"no font config"),
+            Self::FontConfigError(e) => write!(f, "{}", e),
+            Self::WaylandLayerShellError => write!(f, "Wayland layer shell error"),
         }
     }
 }

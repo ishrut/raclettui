@@ -10,7 +10,7 @@ use wayland_client::{
     },
 };
 use wayland_protocols_wlr::layer_shell::v1::client::{
-    zwlr_layer_shell_v1::{self, Layer, ZwlrLayerShellV1},
+    zwlr_layer_shell_v1::{Layer, ZwlrLayerShellV1},
     zwlr_layer_surface_v1::{self, Anchor, KeyboardInteractivity, ZwlrLayerSurfaceV1},
 };
 use xkbcommon::xkb;
@@ -23,7 +23,7 @@ pub struct WindowBuilder {
     pub width: u32,
     pub height: u32,
     pub anchors: Option<Anchor>,
-    pub margin: Option<(i32, i32, i32, i32)>,
+    pub margins: Option<(i32, i32, i32, i32)>,
     pub exclusive_zone: Option<i32>,
     pub keyboard_interactivity: Option<KeyboardInteractivity>,
     pub layer: Layer,
@@ -40,7 +40,7 @@ impl std::default::Default for WindowBuilder {
             width: 100,
             height: 100,
             anchors: None,
-            margin: None,
+            margins: None,
             exclusive_edge: None,
             keyboard_interactivity: None,
             layer: Layer::Overlay,
@@ -53,15 +53,6 @@ impl std::default::Default for WindowBuilder {
 }
 
 pub(crate) struct WaylandState {
-    // surface creation objects
-    pub(crate) layer: zwlr_layer_shell_v1::Layer,
-    pub(crate) namespace: String,
-    pub(crate) anchors: Option<zwlr_layer_surface_v1::Anchor>,
-    pub(crate) exclusive_zone: Option<i32>,
-    pub(crate) margins: Option<(i32, i32, i32, i32)>,
-    pub(crate) exclusive_edge: Option<zwlr_layer_surface_v1::Anchor>,
-    pub(crate) keyboard_interactivity: Option<zwlr_layer_surface_v1::KeyboardInteractivity>,
-
     pub(crate) compositor: Option<wl_compositor::WlCompositor>,
     pub(crate) layer_shell: Option<ZwlrLayerShellV1>,
 
@@ -101,29 +92,82 @@ impl WindowBuilder {
     pub fn new(layer: Layer) -> Self {
         Self {
             namespace: String::new(),
-            width: 0,
-            height: 0,
+            width: 1,
+            height: 1,
             anchors: None,
-            margin: None,
+            margins: None,
             exclusive_zone: None,
             keyboard_interactivity: None,
             layer: layer,
             exclusive_edge: None,
             font_name: None,
-            font_size: 0.,
-            bg_alpha: 0.,
+            font_size: 1.,
+            bg_alpha: 1.,
         }
+    }
+
+    pub fn set_namespace(mut self, name: &str) -> Self {
+        self.namespace = name.to_string();
+        self
+    }
+
+    pub fn set_width(mut self, width: u32) -> Self {
+        self.width = width;
+        self
+    }
+
+    pub fn set_height(mut self, height: u32) -> Self {
+        self.height = height;
+        self
+    }
+
+    pub fn set_anchors(mut self, anchors: Anchor) -> Self {
+        self.anchors = Some(anchors);
+        self
+    }
+
+    pub fn set_margins(mut self, margins: (i32, i32, i32, i32)) -> Self {
+        self.margins = Some(margins);
+        self
+    }
+
+    pub fn set_exclusive_edge(mut self, edge: Anchor) -> Self {
+        self.exclusive_edge = Some(edge);
+        self
+    }
+
+    pub fn set_keyboard_interactivity(mut self, keyboard_interactivity: KeyboardInteractivity) -> Self {
+        self.keyboard_interactivity = Some(keyboard_interactivity);
+        self
+    }
+
+    pub fn set_layer(mut self, layer: Layer) -> Self {
+        self.layer = layer;
+        self
+    }
+
+    pub fn set_exclusive_zone(mut self, exclusive_zone: i32) -> Self {
+        self.exclusive_zone = Some(exclusive_zone);
+        self
+    }
+
+    pub fn set_font_name(mut self, font_name: &'static str) -> Self {
+        self.font_name = Some(font_name);
+        self
+    }
+
+    pub fn set_font_size(mut self, font_size: f32) -> Self {
+        self.font_size = font_size;
+        self
+    }
+
+    pub fn set_bg_alpha(mut self, bg_alpha: f32) -> Self {
+        self.bg_alpha = bg_alpha;
+        self
     }
 
     fn init_wayland_state(&self) -> WaylandState {
         WaylandState {
-            anchors: self.anchors.clone(),
-            keyboard_interactivity: self.keyboard_interactivity.clone(),
-            exclusive_zone: self.exclusive_zone.clone(),
-            exclusive_edge: self.exclusive_edge.clone(),
-            margins: self.margin.clone(),
-            layer: self.layer.clone(),
-            namespace: self.namespace.clone(),
             compositor: None,
             layer_shell: None,
             surface: None,
@@ -160,6 +204,44 @@ impl WindowBuilder {
             .roundtrip(&mut wl_state)
             .map_err(|e| Error::WaylandDispatchError(e))?;
 
+        let wl_surface = wl_state.surface.as_ref()
+            .ok_or(Error::WaylandSurfaceConfigurationError)?;
+
+        // // configuring layer shell surface
+        let layer_shell = wl_state.layer_shell.as_ref()
+            .ok_or(Error::WaylandLayerShellError)?;
+        let layer_surface = layer_shell.get_layer_surface(
+            wl_surface,
+            None,
+            self.layer,
+            self.namespace.clone(),
+            &wl_qh,
+            (),
+        );
+        if let Some(anchor) = self.anchors {
+            layer_surface.set_anchor(anchor);
+        }
+        layer_surface.set_size(self.width, self.height);
+        if let Some(zone) = self.exclusive_zone {
+            layer_surface.set_exclusive_zone(zone);
+        }
+        if let Some((top, right, bottom, left)) = self.margins {
+            layer_surface.set_margin(top, right, bottom, left);
+        }
+        if let Some(keyboard_interactivity) = self.keyboard_interactivity {
+            layer_surface.set_keyboard_interactivity(keyboard_interactivity);
+        }
+        if let Some(edge) = self.exclusive_edge {
+            layer_surface.set_exclusive_edge(edge);
+        }
+
+        wl_state.layer_surface = Some(layer_surface);
+        // initial commit without buffer attached
+        wl_surface.commit();
+
+        wl_event_queue
+            .roundtrip(&mut wl_state)
+            .map_err(|e| Error::WaylandDispatchError(e))?;
         if !wl_state.surface_configured {
             return Err(Error::WaylandSurfaceConfigurationError);
         }
@@ -261,7 +343,7 @@ impl WindowBuilder {
 
         let font_name = match self.font_name {
             Some(font_name) => font_name,
-            None => &self.get_default_font(),
+            None => &self.get_default_font()?,
         };
 
         let effective_font_size = self.font_size * PIXEL_RATIO;
@@ -301,10 +383,12 @@ impl WindowBuilder {
     }
 
     #[inline]
-    fn get_default_font(&self) -> String {
-        let config = fontconfig::Fontconfig::new().unwrap();
-        let font = config.find("monospace", None).unwrap();
-        font.name
+    fn get_default_font(&self) -> Result<String, Error> {
+        let config = fontconfig::Fontconfig::new()
+            .ok_or(Error::NoFontConfig)?;
+        let font = config.find("monospace", None)
+            .map_err(|e| Error::FontConfigError(e))?;
+        Ok(font.name)
     }
 }
 
@@ -322,8 +406,9 @@ impl LayerShellWindow {
 
     #[inline]
     pub(crate) fn set_redraw(&mut self) -> Result<(), Error> {
+        self.set_frame_callback()?;
         self.wayland_state.needs_redraw = false;
-        self.set_frame_callback()
+        Ok(())
     }
 
     // Call this function on a window resize event
@@ -353,14 +438,14 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
         if let wl_registry::Event::Global {
             name,
             interface,
-            version,
+            ..
         } = event
         {
             match interface.as_str() {
                 "wl_compositor" => {
                     let compositor = registry.bind::<wl_compositor::WlCompositor, _, _>(
                         name,
-                        version,
+                        1,
                         qhandle,
                         (),
                     );
@@ -371,48 +456,21 @@ impl Dispatch<wl_registry::WlRegistry, ()> for WaylandState {
                 }
                 "zwlr_layer_shell_v1" => {
                     let layer_shell =
-                        registry.bind::<ZwlrLayerShellV1, _, _>(name, version, qhandle, ());
-
-                    let surface = match &state.surface {
-                        Some(surface) => surface,
-                        None => panic!(
-                            "src/wgpu/wayland.rs unable to create zwlr_layer_shell_v1 surface, no base surface"
-                        ),
-                    };
-
-                    // configuring layer shell surface
-                    let layer_surface = layer_shell.get_layer_surface(
-                        surface,
-                        None,
-                        state.layer,
-                        state.namespace.clone(),
-                        qhandle,
-                        (),
-                    );
-                    if let Some(anchor) = state.anchors {
-                        layer_surface.set_anchor(anchor);
-                    }
-                    layer_surface.set_size(state.window_width, state.window_height);
-                    if let Some(zone) = state.exclusive_zone {
-                        layer_surface.set_exclusive_zone(zone);
-                    }
-                    if let Some((top, right, bottom, left)) = state.margins {
-                        layer_surface.set_margin(top, right, bottom, left);
-                    }
-                    if let Some(keyboard_interactivity) = state.keyboard_interactivity {
-                        layer_surface.set_keyboard_interactivity(keyboard_interactivity);
-                    }
-                    if let Some(edge) = state.exclusive_edge {
-                        layer_surface.set_exclusive_edge(edge);
-                    }
-
+                        registry.bind::<ZwlrLayerShellV1, _, _>(
+                            name,
+                            1,
+                            qhandle,
+                            ()
+                        );
                     state.layer_shell = Some(layer_shell);
-                    state.layer_surface = Some(layer_surface);
-                    // initial commit without buffer attached
-                    surface.commit();
                 }
                 "wl_seat" => {
-                    let seat = registry.bind::<wl_seat::WlSeat, _, _>(name, version, qhandle, ());
+                    let seat = registry.bind::<wl_seat::WlSeat, _, _>(
+                        name,
+                        1,
+                        qhandle,
+                        ()
+                    );
                     state.seat = Some(seat);
                 }
                 _ => {}
@@ -519,14 +577,16 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandState {
                 group,
                 ..
             } => {
-                wl_state.keymap_state.as_mut().unwrap().update_mask(
-                    mods_depressed,
-                    mods_latched,
-                    mods_locked,
-                    0,
-                    0,
-                    group,
-                );
+                if let Some(keymap_state) = &mut wl_state.keymap_state {
+                    keymap_state.update_mask(
+                        mods_depressed,
+                        mods_latched,
+                        mods_locked,
+                        0,
+                        0,
+                        group,
+                    );
+                }
             }
             wl_keyboard::Event::Keymap { fd, size, .. } => {
                 let context = xkb::Context::new(xkb::CONTEXT_NO_FLAGS as xkb::ContextFlags);

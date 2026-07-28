@@ -110,6 +110,7 @@ impl Backend for LayerShellWindow {
             self.wayland_event_queue
                 .blocking_dispatch(&mut self.wayland_state)
                 .map_err(|e| Error::WaylandDispatchError(e))?;
+            // implement timeout
             if self.wayland_state.needs_redraw {
                 break;
             }
