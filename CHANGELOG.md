@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.0] - 29-07-2026
+
+### Changed
+- Refactoring of the library - some breaking changes
+- Removed unnecessary functions
+- Decreased lines of code and number of files
+
+### Fixed
+- Some bugs and panics
+
 ## [0.2.0] - 12-06-2026
 
 ### Changed

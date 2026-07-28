@@ -17,19 +17,50 @@ use xkbcommon::xkb;
 
 const PIXEL_RATIO: f32 = 1.0;
 
+/// Builder for creating a [`LayerShellWindow`].
+///
+/// Use [`WindowBuilder::default()`] to obtain sensible defaults, then chain
+/// any `set_*` methods before calling [`build()`](WindowBuilder::build).
+///
+/// # Example
+///
+/// ```no_run
+/// use raclettui::{WindowBuilder, KeyboardInteractivity, layer_shell::Layer};
+///
+/// let window = WindowBuilder::default()
+///     .set_namespace("my-app")
+///     .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
+///     .build()
+///     .expect("failed to create window");
+/// ```
 #[derive(Debug, Clone)]
 pub struct WindowBuilder {
+    /// Window namespace (used by the compositor for identification).
     pub namespace: String,
+    /// Requested window width in pixels.
     pub width: u32,
+    /// Requested window height in pixels.
     pub height: u32,
+    /// Anchor edges for positioning the layer surface.
     pub anchors: Option<Anchor>,
+    /// Margins (top, right, bottom, left) applied when anchored.
     pub margins: Option<(i32, i32, i32, i32)>,
+    /// Exclusive zone for layer-shell protocol (avoids system
+    /// UI areas such as panels).
     pub exclusive_zone: Option<i32>,
+    /// Whether and how the surface receives keyboard focus.
     pub keyboard_interactivity: Option<KeyboardInteractivity>,
+    /// The layer to place the window in (background, bottom, top, overlay).
     pub layer: Layer,
+    /// When set alongside the corresponding anchor, the surface will
+    /// be strung out to fill the available space along that edge.
     pub exclusive_edge: Option<Anchor>,
+    /// Monospace font family name. Falls back to fontconfig's
+    /// "monospace" when `None`.
     pub font_name: Option<&'static str>,
+    /// Font size in points.
     pub font_size: f32,
+    /// Background alpha multiplier (0.0 = transparent, 1.0 = opaque).
     pub bg_alpha: f32,
 }
 
@@ -78,6 +109,10 @@ pub(crate) struct WaylandState {
     pub(crate) grid_dims: Option<(i32, i32)>,
 }
 
+/// A Wayland layer-shell window that implements [`ratatui_core::backend::Backend`].
+///
+/// Create one via [`WindowBuilder`], then wrap it in a
+/// `ratatui::Terminal` to draw TUI widgets.
 pub struct LayerShellWindow {
     pub(crate) gl_surface: glutin::surface::Surface<glutin::surface::WindowSurface>,
     pub(crate) gl_context: glutin::context::PossiblyCurrentContext,
@@ -89,6 +124,10 @@ pub struct LayerShellWindow {
 }
 
 impl WindowBuilder {
+    /// Creates a new `WindowBuilder` with minimal defaults.
+    ///
+    /// Prefer using [`WindowBuilder::default()`] unless you only need
+    /// to customise the layer and a few other fields.
     pub fn new(layer: Layer) -> Self {
         Self {
             namespace: String::new(),
@@ -98,7 +137,7 @@ impl WindowBuilder {
             margins: None,
             exclusive_zone: None,
             keyboard_interactivity: None,
-            layer: layer,
+            layer,
             exclusive_edge: None,
             font_name: None,
             font_size: 1.,
@@ -106,61 +145,85 @@ impl WindowBuilder {
         }
     }
 
+    /// Sets the window namespace (used by the compositor for identification).
     pub fn set_namespace(mut self, name: &str) -> Self {
         self.namespace = name.to_string();
         self
     }
 
+    /// Sets the requested window width in pixels.
     pub fn set_width(mut self, width: u32) -> Self {
         self.width = width;
         self
     }
 
+    /// Sets the requested window height in pixels.
     pub fn set_height(mut self, height: u32) -> Self {
         self.height = height;
         self
     }
 
+    /// Sets the anchor edges for layer-surface positioning.
+    ///
+    /// Combine anchors with bitwise-OR, e.g.
+    /// `Anchor::Top | Anchor::Left`.
     pub fn set_anchors(mut self, anchors: Anchor) -> Self {
         self.anchors = Some(anchors);
         self
     }
 
+    /// Sets the margins (top, right, bottom, left) applied when the
+    /// surface is anchored.
     pub fn set_margins(mut self, margins: (i32, i32, i32, i32)) -> Self {
         self.margins = Some(margins);
         self
     }
 
+    /// Sets the exclusive edge — the surface will be strung out to
+    /// fill available space along that edge (e.g. for a panel/bar).
     pub fn set_exclusive_edge(mut self, edge: Anchor) -> Self {
         self.exclusive_edge = Some(edge);
         self
     }
 
+    /// Sets whether and how the surface receives keyboard focus.
     pub fn set_keyboard_interactivity(mut self, keyboard_interactivity: KeyboardInteractivity) -> Self {
         self.keyboard_interactivity = Some(keyboard_interactivity);
         self
     }
 
+    /// Sets the layer the window will be placed in.
+    ///
+    /// See [`Layer`] for the stacking order.
     pub fn set_layer(mut self, layer: Layer) -> Self {
         self.layer = layer;
         self
     }
 
+    /// Sets the exclusive zone (avoids system UI areas such as panels).
     pub fn set_exclusive_zone(mut self, exclusive_zone: i32) -> Self {
         self.exclusive_zone = Some(exclusive_zone);
         self
     }
 
+    /// Sets a specific monospace font family by name.
+    ///
+    /// Falls back to fontconfig's "monospace" when not set.
     pub fn set_font_name(mut self, font_name: &'static str) -> Self {
         self.font_name = Some(font_name);
         self
     }
 
+    /// Sets the font size in points.
     pub fn set_font_size(mut self, font_size: f32) -> Self {
         self.font_size = font_size;
         self
     }
 
+    /// Sets the background alpha multiplier.
+    ///
+    /// * `0.0` — fully transparent
+    /// * `1.0` — fully opaque
     pub fn set_bg_alpha(mut self, bg_alpha: f32) -> Self {
         self.bg_alpha = bg_alpha;
         self
@@ -187,6 +250,15 @@ impl WindowBuilder {
         }
     }
 
+    /// Builds the [`LayerShellWindow`], connecting to Wayland, creating the
+    /// layer surface, initialising OpenGL, and setting up the GPU glyph
+    /// rasterizer.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the Wayland connection fails, the compositor
+    /// does not support the layer-shell protocol, no suitable OpenGL
+    /// config is available, or font loading fails.
     pub fn build(self) -> Result<LayerShellWindow, Error> {
         let wl_conn = Connection::connect_to_env().map_err(|e| Error::WaylandConnectError(e))?;
         let mut wl_event_queue = wl_conn.new_event_queue();
@@ -411,7 +483,10 @@ impl LayerShellWindow {
         Ok(())
     }
 
-    // Call this function on a window resize event
+    /// Resizes the terminal grid to the given pixel dimensions.
+    ///
+    /// Call this when you receive a [`WindowEvent::Resize`] to keep the
+    /// grid in sync with the new window size.
     pub fn resize_grid(&mut self, width: u32, height: u32) -> Result<(), Error> {
         self.grid
             .resize(&self.gl, (width as i32, height as i32), PIXEL_RATIO)
@@ -421,6 +496,9 @@ impl LayerShellWindow {
         Ok(())
     }
 
+    /// Returns a cloneable handle to the event queue.
+    ///
+    /// Poll events with [`WindowEventQueue::drain`] in your main loop.
     pub fn events(&self) -> WindowEventQueue {
         self.wayland_state.events.clone()
     }

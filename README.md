@@ -1,59 +1,100 @@
 <p align="center">
-<a href="https://github.com/ishrut/raclettui"><img src="https://github.com/ishrut/raclettui/blob/main/assets/raclettuilogo.png" width="500"></a>
+  <img src="assets/raclettuilogo.png" width="500" alt="raclettui logo">
 </p>
 
 <div align="center">
+
+[![Crates.io](https://img.shields.io/crates/v/raclettui)](https://crates.io/crates/raclettui)
+[![docs.rs](https://img.shields.io/docsrs/raclettui)](https://docs.rs/raclettui)
+[![MIT/Apache 2.0](https://img.shields.io/crates/l/raclettui)](https://github.com/ishrut/raclettui)
 
 </div>
 
 # Raclettui
 
-Build terminal-themed wayland layer shell applications with Rust. Powered by [Ratatui].
+Build TUI (terminal user interface) windows on Wayland via the
+layer-shell protocol. Powered by [Ratatui] and [beamterm-core].
 
 ## About
-**Raclettui** allows you to create windows using wayland layer shell protocol and implements the [Ratatui] Backend trait to draw terminal style UIs.
-Layer shell protocol is usually used to create menus, bars and lockscreens.
-This project is still under active development. Expect bugs and breaking changes. However, it works if you would like to try it out.
-It uses [beamterm-core] crate as terminal renderer. This library was developped to cook a UI for my project as no UI libraries in the rust ecosystem implementing the layer shell protocol were to my liking.
 
-## Quickstart
+Raclettui creates `zwlr_layer_shell_v1` windows (overlays, panels, bars,
+lock screens) and implements the Ratatui `Backend` trait so you can draw
+terminal-style UIs with GPU-accelerated glyph rendering.
 
-### Setup
+This project is still under active development — expect bugs and breaking
+changes. It was developed to build a UI for the author's personal project
+when no existing Rust layer-shell libraries fit their needs.
 
-Add **Raclettui** as a dependency in your `Cargo.toml`:
+## Requirements
+
+- A Wayland compositor that supports the
+  [`zwlr_layer_shell_v1`](https://wayland.app/protocols/wlr-layer-shell-unstable-v1)
+  protocol (e.g. Sway, Hyprland, River)
+- OpenGL 3.3+ / EGL
+- `fontconfig` (for monospace font discovery)
+
+## Usage
+
+Add the dependency:
 
 ```sh
 cargo add raclettui
 ```
 
-Checkout examples/hello.rs for a minimal example.
+Minimal example:
 
-## Demo
-Converting the bluetui app interface in to a layer shell window is as simple as switching the backend.
-However, converting the crossterm events to window events is still a work in progress.
-<a><img src="https://github.com/ishrut/raclettui/blob/main/assets/bluetuidemo.png" width="500"></a>
+```rust no_run
+use raclettui::{
+    WindowBuilder, KeyCode, WindowEvent,
+    layer_shell::KeyboardInteractivity,
+};
+use ratatui::{Terminal, widgets::Paragraph};
 
+fn main() {
+    let window = WindowBuilder::default()
+        .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
+        .build()
+        .expect("failed to create window");
+
+    let events = window.events();
+    let mut terminal = Terminal::new(window).unwrap();
+
+    loop {
+        terminal
+            .draw(|f| {
+                f.render_widget(Paragraph::new("Hello 👋"), f.area());
+            })
+            .unwrap();
+
+        for ev in events.drain() {
+            if let WindowEvent::Keyboard(k) = ev {
+                if matches!(k.code, KeyCode::Esc | KeyCode::Char('q')) {
+                    return;
+                }
+            }
+        }
+    }
+}
+```
+
+See [examples/hello.rs](examples/hello.rs) for a more complete example.
 
 ## Documentation
 
-- [API Documentation]()
-- [Backends]()
-- [Widgets]()
-
-## Acknowledgements
-
-Thanks to [Ratzilla] projects for the inspiration.
-Thanks to [Ratatui] for providing the core UI components.
-
-[Ratatui]: https://ratatui.rs
-[Ratzilla]: https://github.com/ratatui/ratzilla
-[beamterm-core]: https://github.com/junkdog/beamterm
+Full API documentation: <https://docs.rs/raclettui>
 
 ## Contributing
 
-Pull requests are welcome!
-Please see todo list: [TODO](./TODO.md)
+Pull requests are welcome! See the [todo list](./TODO.md).
 
-## Copyright
+## License
 
-Copyright © 2025, [Ishrut](mailto:)
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+[Ratatui]: https://ratatui.rs
+[beamterm-core]: https://github.com/junkdog/beamterm

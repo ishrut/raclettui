@@ -1,4 +1,4 @@
 # 🚀 TODOs
 
-- [ ] Add custom path fonts
-- [ ] Font size
+- [ ] Test and report bugs
+- [ ] Add cursor supprt

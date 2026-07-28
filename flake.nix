@@ -16,36 +16,18 @@
 
         devShell = with pkgs; mkShell {
           buildInputs = [
-            # rust packages
             cargo
             rustc
             rustfmt
             pre-commit
             rust-analyzer
             rustPackages.clippy
-            wgsl-analyzer
-
-            # egl packages
             libglvnd
-
-            # vulkan dependencie
-            vulkan-loader
-            vulkan-validation-layers
-            vulkan-tools
             mesa
-
-
-            # wayland packages
             wayland
-            egl-wayland
-
-            #keyboard events
             libevdev
             libxkbcommon
-            libxcb
             fontconfig
-
-            # Clang / bindgen
             llvmPackages.clang
             llvmPackages.libclang
           ];

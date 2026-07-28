@@ -26,7 +26,7 @@ fn main() {
         terminal
             .draw(|f| {
                 let size = f.area();
-                let paragraph = Paragraph::new("Hello  World")
+                let paragraph = Paragraph::new("Hello World")
                     .block(Block::new().borders(border!(TOP, BOTTOM, RIGHT, LEFT)))
                     .set_style(Style::new().fg(Color::Red).bg(Color::Blue));
                 f.render_widget(paragraph, size);

@@ -1,25 +1,35 @@
+/// Errors that can occur during window creation, rendering, and event handling.
 #[derive(Debug)]
 pub enum Error {
+    /// Failed to connect to the Wayland display server.
     WaylandConnectError(wayland_client::ConnectError),
+    /// Failed to dispatch or roundtrip the Wayland event queue.
     WaylandDispatchError(wayland_client::DispatchError),
+    /// The Wayland surface was never configured by the compositor.
     WaylandSurfaceConfigurationError,
+    /// The compositor does not advertise the `zwlr_layer_shell_v1` global.
     WaylandLayerShellError,
+    /// The Wayland surface pointer returned null.
     WaylandSurfacePtrNull,
+    /// The Wayland display pointer returned null.
     WaylandDisplayPtrNull,
+    /// An error occurred while creating or using the GL display/context/surface.
     GlutinError(glutin::error::Error),
+    /// No suitable OpenGL config was found for the window surface.
     GlutinDisplayNull,
+    /// Fontconfig is not available on this system.
     NoFontConfig,
+    /// Failed to find a font via fontconfig.
     FontConfigError(fontconfig::FontconfigError),
+    /// Window height is zero (needed for `NonZeroU32`).
     ZeroWindowHeight,
+    /// Window width is zero (needed for `NonZeroU32`).
     ZeroWindowWidth,
+    /// Swap interval is zero (needed for `NonZeroU32`).
     ZeroSwapInterval,
-    IoError(std::io::Error),
+    /// Failed to set the Wayland frame callback — surface may have been destroyed.
     WaylandFrameCallbackError,
-    RatatuiBackendError,
-    FontLoadingError,
-    UnsupportedBackendFeature,
-    OutOfBounds,
-    CharWidthError,
+    /// An error from the `beamterm` rasterizer or GPU renderer.
     BeamTermError(beamterm_core::Error),
 }
 
@@ -38,15 +48,9 @@ impl std::fmt::Display for Error {
             Self::ZeroWindowHeight => write!(f, "window height is zero"),
             Self::ZeroWindowWidth => write!(f, "window width is zero"),
             Self::ZeroSwapInterval => write!(f, "swap interval is zero"),
-            Self::IoError(e) => write!(f, "{}", e),
             Self::WaylandFrameCallbackError => {
                 write!(f, "unable to set wayland frame callback, surface dropped?")
             }
-            Self::RatatuiBackendError => write!(f, "ratatui backend error"),
-            Self::FontLoadingError => write!(f, "unable to load font"),
-            Self::UnsupportedBackendFeature => write!(f, "unsupported backend feature"),
-            Self::OutOfBounds => write!(f, "setting character out of bounds"),
-            Self::CharWidthError => write!(f, "unable to get font metrics to measure cell width"),
             Self::BeamTermError(e) => write!(f, "{}", e),
             Self::NoFontConfig => write!(f,"no font config"),
             Self::FontConfigError(e) => write!(f, "{}", e),
