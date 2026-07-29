@@ -87,6 +87,9 @@ Full API documentation: <https://docs.rs/raclettui>
 
 Pull requests are welcome! See the [todo list](./TODO.md).
 
+## AI Disclaimer
+AI was used to generate documentation and some snippets. However, this is not vibe coded.
+
 ## License
 
 Licensed under either of
