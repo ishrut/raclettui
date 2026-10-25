@@ -1,54 +1,58 @@
+//! A minimal ratatui app using the wgpu (GPU) backend.
+//!
+//! Run with: `cargo run --example wgpu_ratatui`
+//! Set `RACLETTUI_FONT=/path/to/font.ttf` to use a specific font.
+//! Press `q` or `Esc` to quit.
+
 use raclettui::{
     WindowBuilder,
-    layer::{Anchor, Layer, KeyboardInteractivity},
-    events::{WindowEvent, KeyCode},
+    events::{KeyCode, WindowEvent},
+    layer::{Anchor, KeyboardInteractivity, Layer},
 };
 use ratatui::{
     Terminal,
-    border,
-    style::{Style, Styled},
-    widgets::{Block, Paragraph}
+    layout::Alignment,
+    style::{Color, Style},
+    widgets::{Block, Paragraph},
 };
 
-fn main(){
-
-    let window = WindowBuilder::new()
-        .set_namespace("example")
-        .set_width(300)
-        .set_height(500)
+fn main() -> Result<(), raclettui::Error> {
+    let mut builder = WindowBuilder::new()
+        .set_namespace("wgpu-example")
+        .set_width(500)
+        .set_height(300)
         .set_layer(Layer::Top)
         .set_anchor(Anchor::Top)
+        .set_margin(20, 0, 0, 0)
         .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
-        // .set_font_path("fonts/Some-Mono-Font.ttf")
-        .set_font_size(18.)
-        .set_bg_alpha(0.5)
-        .set_fg_alpha(1.0)
-        // .init_cpu() // for cpu rendering
-        .init_wgpu().unwrap();
+        .set_bg_alpha(0.8);
+    if let Ok(font) = std::env::var("RACLETTUI_FONT") {
+        builder = builder.set_font_path(font);
+    }
 
+    let window = builder.init_wgpu()?;
     let events = window.get_event_queue();
-    let mut terminal = Terminal::new(window).unwrap();
+    let mut terminal = Terminal::new(window)?;
 
-    'app_loop: loop{
-
+    let mut presses = 0;
+    loop {
         terminal.draw(|f| {
-            let size = f.area();
-            let paragraph = Paragraph::new("Hello World")
-                .block(
-                    Block::new()
-                    .borders(border!(TOP, BOTTOM, RIGHT, LEFT))
-                )
-                .set_style(Style::new().fg(ratatui::style::Color::Red).bg(ratatui::style::Color::Blue));
-            f.render_widget(paragraph, size);
-        }).unwrap();
+            let text = format!("Hello World!\n\nkeys pressed: {presses}\n\npress q to quit");
+            let paragraph = Paragraph::new(text)
+                .alignment(Alignment::Center)
+                .block(Block::bordered().title(" raclettui · wgpu "))
+                .style(Style::new().fg(Color::Red).bg(Color::Blue));
+            f.render_widget(paragraph, f.area());
+        })?;
 
-        for ev in events.drain() {
-            if let WindowEvent::Keyboard(key_event) = ev {
-                match key_event.code {
-                    KeyCode::Char('q') => break 'app_loop,
-                    _ => {}
-                }
-
+        for event in events.drain() {
+            match event {
+                WindowEvent::Keyboard(key) if key.is_press() => match key.code {
+                    KeyCode::Char('q') | KeyCode::Esc => return Ok(()),
+                    _ => presses += 1,
+                },
+                WindowEvent::Closed => return Ok(()),
+                _ => {}
             }
         }
     }

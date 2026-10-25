@@ -7,10 +7,10 @@ pub fn wgpu_create_adapter(instance: &wgpu::Instance, surface: &wgpu::Surface) -
         .request_adapter(&wgpu::RequestAdapterOptionsBase {
             power_preference: wgpu::PowerPreference::default(),
             force_fallback_adapter: false,
-            compatible_surface: Some(&surface),
+            compatible_surface: Some(surface),
         })
         .block_on()
-        .map_err(|e| Error::WgpuAdapterError(e))?;
+        .map_err(Error::WgpuAdapterError)?;
     Ok(adapter)
 }
 
@@ -27,43 +27,50 @@ pub fn wgpu_get_device_queue(adapter: &wgpu::Adapter) -> Result<(wgpu::Device, w
             trace: wgpu::Trace::Off,
         })
         .block_on()
-        .map_err(|e| Error::WgpuRequestDeviceError(e))?;
+        .map_err(Error::WgpuRequestDeviceError)?;
 
     Ok((wgpu_device, wgpu_queue))
 }
 
 // if window is resized new configuration is needed
-pub fn wgpu_get_surface_config(surface: &wgpu::Surface, adapter: &wgpu::Adapter, width: u32, height: u32) -> wgpu::SurfaceConfiguration {
+pub fn wgpu_get_surface_config(surface: &wgpu::Surface, adapter: &wgpu::Adapter, width: u32, height: u32) -> Result<wgpu::SurfaceConfiguration, Error> {
 
-    // snorm for between -1 and 1 values stored in gpu
-    let surface_caps = surface.get_capabilities(&adapter);
+    let surface_caps = surface.get_capabilities(adapter);
 
+    // an empty capability list means the adapter cannot present to this surface
+    let first_format = *surface_caps.formats.first().ok_or(Error::WgpuWindowError)?;
     let surface_format = surface_caps
         .formats
         .iter()
-        // usinf sRGB format
+        // colors are converted to linear space, so an sRGB format is needed
         .find(|f| f.is_srgb())
         .copied()
-        .unwrap_or(surface_caps.formats[0]);
+        .unwrap_or(first_format);
 
+    // premultiplied alpha is needed for the window transparency
     let alpha_mode = if surface_caps
         .alpha_modes
         .contains(&wgpu::CompositeAlphaMode::PreMultiplied)
     {
         wgpu::CompositeAlphaMode::PreMultiplied
     } else {
-        surface_caps.alpha_modes[0]
+        surface_caps.alpha_modes.first().copied().unwrap_or(wgpu::CompositeAlphaMode::Auto)
     };
+    let present_mode = surface_caps
+        .present_modes
+        .first()
+        .copied()
+        .unwrap_or(wgpu::PresentMode::Fifo);
 
     let wgpu_config = wgpu::SurfaceConfiguration {
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         format: surface_format,
         width,
         height,
-        present_mode: surface_caps.present_modes[0],
+        present_mode,
         alpha_mode,
         view_formats: vec![],
         desired_maximum_frame_latency: 2,
     };
-    wgpu_config
+    Ok(wgpu_config)
 }

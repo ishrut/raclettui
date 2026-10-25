@@ -1,11 +1,47 @@
+//! Keyboard, pointer and window events.
+//!
+//! Events are collected while the window waits for the compositor (inside
+//! ratatui's `Terminal::draw`, or [`CpuWindow::update`](crate::CpuWindow::update) /
+//! [`WgpuWindow::update`](crate::WgpuWindow::update)) and pushed to a
+//! [`WindowEventQueue`]. Get a handle to the queue with `get_event_queue()`
+//! before handing the window to ratatui, then drain it after every frame:
+//!
+//! ```no_run
+//! use raclettui::{WindowBuilder, Anchor, KeyboardInteractivity};
+//! use raclettui::events::{KeyCode, WindowEvent};
+//! use ratatui::{Terminal, widgets::Paragraph};
+//!
+//! let window = WindowBuilder::new()
+//!     .set_width(400)
+//!     .set_height(200)
+//!     .set_anchor(Anchor::Top)
+//!     .set_keyboard_interactivity(KeyboardInteractivity::OnDemand)
+//!     .init_cpu()?;
+//! let events = window.get_event_queue();
+//! let mut terminal = Terminal::new(window)?;
+//!
+//! 'app: loop {
+//!     terminal.draw(|f| f.render_widget(Paragraph::new("press q"), f.area()))?;
+//!     for event in events.drain() {
+//!         match event {
+//!             WindowEvent::Keyboard(key) if key.is_press() && key.code == KeyCode::Char('q') => break 'app,
+//!             WindowEvent::Closed => break 'app,
+//!             _ => {}
+//!         }
+//!     }
+//! }
+//! # Ok::<(), raclettui::Error>(())
+//! ```
+
 use xkbcommon::xkb;
 use std::{cell::RefCell, rc::Rc};
 
-/// A thread-local, reference-counted event queue for window events.
+/// A single-threaded, reference-counted event queue for window events.
 ///
-/// Internally uses `Rc<RefCell<Vec<T>>>` to allow multiple clones of the queue
-/// to push and drain events safely within the same thread.
-#[derive(Debug, Clone)]
+/// Internally uses `Rc<RefCell<Vec<WindowEvent>>>`; cloning the queue
+/// produces a new handle to the same underlying events, so the window can
+/// push events while the application drains them.
+#[derive(Debug, Clone, Default)]
 pub struct WindowEventQueue {
     /// Internal, shared queue wrapped in `Rc<RefCell<...>>`.
     inner: Rc<RefCell<Vec<WindowEvent>>>,
@@ -16,22 +52,16 @@ impl WindowEventQueue {
     ///
     /// # Example
     /// ```
-    /// let queue: WindowEventQueue<WindowEvent> = WindowEventQueue::new();
+    /// use raclettui::events::{WindowEvent, WindowEventQueue};
+    ///
+    /// let queue = WindowEventQueue::new();
+    /// let handle = queue.clone();
+    /// handle.push(WindowEvent::new_resize_event(800, 600));
+    /// assert_eq!(queue.drain(), vec![WindowEvent::Resize { width: 800, height: 600 }]);
+    /// assert!(queue.is_empty());
     /// ```
     pub fn new() -> Self {
-        Self {
-            inner: Rc::new(RefCell::new(Vec::<WindowEvent>::new())),
-        }
-    }
-
-    /// Clone the queue, producing a new handle pointing to the same underlying vector.
-    ///
-    /// This allows pushing events from multiple places while keeping a single
-    /// logical queue.
-    pub fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone()
-        }
+        Self::default()
     }
 
     /// Add an event to the queue.
@@ -42,7 +72,7 @@ impl WindowEventQueue {
         self.inner.borrow_mut().push(event);
     }
 
-    /// Remove and return all events currently in the queue.
+    /// Remove and return all events currently in the queue, oldest first.
     ///
     /// # Returns
     /// A `Vec<WindowEvent>` containing all drained events.
@@ -69,11 +99,21 @@ pub enum WindowEvent {
     /// A pointer-related event.
     Pointer(MouseEvent),
 
-    /// The window has been resized.
+    /// The compositor resized the window. `width` and `height` are in pixels.
+    ///
+    /// The ratatui grid is resized automatically on the next draw.
     Resize {
+        /// New width in pixels.
         width: u32,
+        /// New height in pixels.
         height: u32
     },
+
+    /// The compositor closed the window, e.g. because its output was
+    /// disconnected. Drawing to the window returns
+    /// [`Error::WindowClosed`](crate::Error::WindowClosed) afterwards, so
+    /// the application should exit or create a new window.
+    Closed,
 }
 
 impl WindowEvent {
@@ -82,7 +122,7 @@ impl WindowEvent {
     /// # Parameters
     /// * `keymap_state` - The current XKB state.
     /// * `key` - The hardware keycode (usually from Wayland).
-    /// * `value` - Key press/release state (often 0=release, 1=press).
+    /// * `value` - Key state: 0 = release, 1 = press, 2 = repeat.
     ///
     /// # Returns
     /// A `WindowEvent::Keyboard` containing a populated `KeyEvent`.
@@ -120,12 +160,9 @@ impl WindowEvent {
             xkb::Keysym::F11 => KeyCode::F(11),
             xkb::Keysym::F12 => KeyCode::F(12),
             _ =>  {
-                let utf32 = xkb::keysym_to_utf32(keysym);
-                if utf32 != 0 {
-                    let ch = std::char::from_u32(utf32).unwrap();
-                    KeyCode::Char(ch)
-                } else {
-                    KeyCode::Unidentified
+                match std::char::from_u32(xkb::keysym_to_utf32(keysym)) {
+                    Some(ch) if ch != '\0' => KeyCode::Char(ch),
+                    _ => KeyCode::Unidentified,
                 }
             }
         };
@@ -160,11 +197,12 @@ impl WindowEvent {
 
     /// Create a pointer button press/release event.
     ///
+    /// Maps Linux evdev button codes (`BTN_LEFT` = 272, `BTN_RIGHT` = 273,
+    /// `BTN_MIDDLE` = 274) to a [`ButtonCode`].
+    ///
     /// # Parameters
-    /// * `code` - The button code from the hardware.
-    /// * `value` - Press/release state.
-    /// Maps Linux evdev button codes to semantic ButtonCode.
-    /// Note: Wayland sends only u32 button codes; these numbers are common defaults.
+    /// * `code` - The evdev button code sent by the compositor.
+    /// * `value` - Button state: 0 = released, 1 = pressed.
     pub fn new_pointer_button_event(code: u32, value: u32) -> Self {
         let button_code = match code {
             272 => ButtonCode::Left,
@@ -182,12 +220,16 @@ impl WindowEvent {
 }
 
 /// Keyboard event details.
+///
+/// Both presses and releases are reported, check [`is_press`](Self::is_press)
+/// to react to a key only once.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub struct KeyEvent {
     /// Logical key code (maps physical key to semantic meaning).
     pub code: KeyCode,
 
-    /// Key press/release value (often 0=release, 1=press).
+    /// Key state: 0 = release, 1 = press, 2 = repeat (sent by compositors
+    /// implementing `wl_seat` version 10).
     pub value: u32,
 
     /// Whether the shift modifier is active.
@@ -200,23 +242,62 @@ pub struct KeyEvent {
     pub ctrl: bool,
 }
 
+impl KeyEvent {
+    /// Returns `true` if the key was pressed.
+    pub fn is_press(&self) -> bool {
+        self.value == 1
+    }
+
+    /// Returns `true` if the key was released.
+    pub fn is_release(&self) -> bool {
+        self.value == 0
+    }
+
+    /// Returns `true` if this is a compositor generated key repeat.
+    pub fn is_repeat(&self) -> bool {
+        self.value == 2
+    }
+}
+
 /// Pointer (mouse) events.
+///
+/// Coordinates are surface-local, in logical pixels.
 #[derive(Debug, Clone, PartialEq)]
 pub enum MouseEvent {
     /// Mouse moved to a specific position.
-    Motion { x: f64, y: f64 },
+    Motion {
+        /// Horizontal position.
+        x: f64,
+        /// Vertical position.
+        y: f64,
+    },
 
     /// Pointer entered the window at a position.
-    Enter { x: f64, y: f64 },
+    Enter {
+        /// Horizontal position.
+        x: f64,
+        /// Vertical position.
+        y: f64,
+    },
 
     /// Pointer left the window.
     Leave,
 
-    /// Mouse button pressed/released.
-    Button { code: ButtonCode, value: u32 },
+    /// Mouse button pressed (`value` = 1) or released (`value` = 0).
+    Button {
+        /// Which button changed.
+        code: ButtonCode,
+        /// 1 = pressed, 0 = released.
+        value: u32,
+    },
 
-    /// Axis event (scrolling).
-    Axis { code: AxisCode, value: f64 },
+    /// Axis event (scrolling). Positive values scroll down / right.
+    Axis {
+        /// Scroll direction.
+        code: AxisCode,
+        /// Scroll distance in logical pixels.
+        value: f64,
+    },
 }
 
 /// Logical key codes.
@@ -228,18 +309,31 @@ pub enum KeyCode {
     /// Function keys F1-F12.
     F(u8),
 
+    /// Backspace key.
     Backspace,
+    /// Enter / Return key.
     Enter,
+    /// Left arrow key.
     Left,
+    /// Right arrow key.
     Right,
+    /// Up arrow key.
     Up,
+    /// Down arrow key.
     Down,
+    /// Tab key.
     Tab,
+    /// Delete key.
     Delete,
+    /// Home key.
     Home,
+    /// End key.
     End,
+    /// Page up key.
     PageUp,
+    /// Page down key.
     PageDown,
+    /// Escape key.
     Esc,
 
     /// Unknown or unmapped key.
@@ -249,15 +343,21 @@ pub enum KeyCode {
 /// Mouse button codes.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum ButtonCode {
+    /// Left mouse button.
     Left,
+    /// Right mouse button.
     Right,
+    /// Middle mouse button / wheel click.
     Middle,
+    /// Any other button.
     Unknown,
 }
 
 /// Axis (scroll) types for pointer events.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub enum AxisCode {
+    /// Vertical scroll wheel / gesture.
     VerticalScroll,
+    /// Horizontal scroll wheel / gesture.
     HorizontalScroll,
 }

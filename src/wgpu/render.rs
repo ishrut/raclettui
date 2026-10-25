@@ -1,13 +1,16 @@
 use glyphon::FontSystem;
+use ratatui_core::style::Modifier;
 use wgpu::util::DeviceExt;
 
 use crate::colors::RaclettuiColor;
 use crate::builder::WindowBuilder;
 use crate::Error;
 
-const CELL_WIDTH_F: f32 = 1.4;
+/// Line height as a multiple of the font size.
 const CELL_HEIGHT_F: f32 = 1.1;
 
+/// Cell contents of the wgpu backend: one shaped text buffer and one
+/// background color per cell.
 pub struct TerminalGrid {
     pub physical_width: f32,
     pub physical_height: f32,
@@ -22,6 +25,7 @@ pub struct TerminalGrid {
     pub bg_alpha: f32,
 }
 impl TerminalGrid {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         physical_width: f32,
         physical_height: f32,
@@ -53,13 +57,16 @@ impl TerminalGrid {
         }
     }
 
-    // to add italics bolds ... needs a way to force a font.
+    /// Sets the character of a cell. [`Modifier::BOLD`] and
+    /// [`Modifier::ITALIC`] select the matching face of the monospace font
+    /// when available, other modifiers are ignored.
     pub fn set_ch(
         &mut self,
         row: u32,
         col: u32,
         ch: char,
         color: RaclettuiColor,
+        modifier: Modifier,
         font_system: &mut FontSystem,
     ) -> Result<(), Error>
     {
@@ -67,14 +74,22 @@ impl TerminalGrid {
             return Err(Error::OutOfBounds)
         }
 
+        let mut attrs = glyphon::Attrs::new()
+            .color(color.into())
+            .family(glyphon::Family::Monospace);
+        if modifier.contains(Modifier::BOLD) {
+            attrs = attrs.weight(glyphon::Weight::BOLD);
+        }
+        if modifier.contains(Modifier::ITALIC) {
+            attrs = attrs.style(glyphon::Style::Italic);
+        }
+
         let idx = (row * self.cols + col) as usize;
+        let mut text = [0u8; 4];
         self.ch_buffer[idx].set_text(
             font_system,
-            ch.to_string().as_str(),
-            &glyphon::Attrs::new()
-                .color(color.into())
-                .family(glyphon::cosmic_text::Family::Monospace),
-                // .style(cosmic_text::Style::Italic)
+            ch.encode_utf8(&mut text),
+            &attrs,
             glyphon::Shaping::Advanced,
             None,
         );
@@ -82,6 +97,7 @@ impl TerminalGrid {
         Ok(())
     }
 
+    /// Sets the background color of a cell.
     pub fn set_bg(
         &mut self,
         row: u32,
@@ -134,10 +150,14 @@ struct QuadVertex {
     color: [f32; 4],
 }
 
+/// Renders a [`TerminalGrid`]: cell backgrounds as quads, then the text with glyphon.
 pub struct GridRenderer {
     pub grid: TerminalGrid,
     pub font_system: FontSystem,
-    // font_size: f32,
+    font_size: f32,
+    line_height: f32,
+    fg_alpha: f32,
+    bg_alpha: f32,
 
     window_width: u32,
     window_height: u32,
@@ -167,8 +187,8 @@ impl GridRenderer {
         let swash_cache = glyphon::SwashCache::new();
 
         let cache = glyphon::Cache::new(device);
-        let viewport = glyphon::Viewport::new(&device, &cache);
-        let mut atlas = glyphon::TextAtlas::new(&device, queue, &cache, swapchain_format);
+        let viewport = glyphon::Viewport::new(device, &cache);
+        let mut atlas = glyphon::TextAtlas::new(device, queue, &cache, swapchain_format);
         let text_renderer = glyphon::TextRenderer::new(
                 &mut atlas,
                 device,
@@ -176,30 +196,19 @@ impl GridRenderer {
                 None
             );
 
-        // line height same as font size, can add a multiplier to it for breating room.
-        let font_size = window_builder.font_size;
-        // increasing the line height by a factor. // to finetune
-        let line_height =  CELL_HEIGHT_F * font_size;
-        let mut text_buffer = glyphon::Buffer::new(&mut font_system, glyphon::Metrics::new(font_size, line_height));
-
-        // calculating cell height and width
-        text_buffer.set_text(
-            &mut font_system,
-            "M",
-            &glyphon::Attrs::new().family(glyphon::Family::Monospace),
-            glyphon::Shaping::Advanced,
-            None
-         );
-        let mut layout = text_buffer.layout_runs();
-        let char_width = layout.next()
-            .ok_or(Error::CharWidthError)?.line_w;
+        // A cell is exactly one character advance wide, so glyphs like the
+        // box drawing characters join up with their neighbours. The font size
+        // is adjusted slightly so the advance is a whole number of pixels,
+        // fractional cell widths leave seams between cells.
+        let requested_size = window_builder.font_size;
+        let advance = Self::measure_advance(&mut font_system, requested_size)?;
+        let cell_width = advance.round().max(1.0);
+        let font_size = requested_size * cell_width / advance;
+        let line_height = (CELL_HEIGHT_F * font_size).round().max(1.0);
+        let cell_height = line_height;
 
         let physical_width = surface_config.width as f32;
         let physical_height = surface_config.height as f32;
-
-        let cell_height = line_height;
-        // adding some padding because characters overflow.
-        let cell_width = char_width * CELL_WIDTH_F;
 
         let grid = TerminalGrid::new(
             physical_width,
@@ -277,6 +286,10 @@ impl GridRenderer {
         Ok(Self {
             font_system,
             grid,
+            font_size,
+            line_height,
+            fg_alpha: window_builder.fg_alpha,
+            bg_alpha: window_builder.bg_alpha,
             window_width: surface_config.width,
             window_height: surface_config.height,
             cell_width,
@@ -289,6 +302,47 @@ impl GridRenderer {
 
             quad_pipeline,
         })
+    }
+
+    /// Advance width of `M` in the monospace font at `font_size`.
+    fn measure_advance(font_system: &mut FontSystem, font_size: f32) -> Result<f32, Error> {
+        let mut buffer = glyphon::Buffer::new(font_system, glyphon::Metrics::new(font_size, font_size));
+        buffer.set_text(
+            font_system,
+            "M",
+            &glyphon::Attrs::new().family(glyphon::Family::Monospace),
+            glyphon::Shaping::Advanced,
+            None,
+        );
+        buffer
+            .layout_runs()
+            .next()
+            .and_then(|run| run.glyphs.first().map(|glyph| glyph.w))
+            .filter(|advance| *advance > 0.0)
+            .ok_or(Error::CharWidthError)
+    }
+
+    /// Resets every cell to an empty, transparent cell.
+    pub fn clear(&mut self) {
+        self.grid = TerminalGrid::new(
+            self.window_width as f32,
+            self.window_height as f32,
+            self.cell_width,
+            self.cell_height,
+            &mut self.font_system,
+            self.font_size,
+            self.line_height,
+            self.fg_alpha,
+            self.bg_alpha,
+        );
+    }
+
+    /// Resizes the grid to fit a `width` x `height` pixel surface.
+    /// All cells are cleared.
+    pub fn resize(&mut self, width: u32, height: u32) {
+        self.window_width = width;
+        self.window_height = height;
+        self.clear();
     }
 
     // to be optimised to use instancing
@@ -304,14 +358,13 @@ impl GridRenderer {
 
                 let idx = (row * self.grid.cols + col) as usize;
                 let bg_color = self.grid.bg_buffer[idx];
-                let x = col as f32 * self.cell_width as f32;
-                let y = row as f32 * self.cell_height as f32;
+                let x = col as f32 * self.cell_width;
+                let y = row as f32 * self.cell_height;
 
                 let x0 = (x / self.window_width as f32) * 2.0 - 1.0;
                 let y0 = 1.0 - (y / self.window_height as f32) * 2.0;
-                let x1 = ((x + self.cell_width as f32) / self.window_width as f32) * 2.0 - 1.0;
-                let y1 = 1.0 - ((y + self.cell_height as f32) / self.window_height as f32) * 2.0;
-                // let color = colors::linear_color(bg_color, self.grid.bg_alpha);
+                let x1 = ((x + self.cell_width) / self.window_width as f32) * 2.0 - 1.0;
+                let y1 = 1.0 - ((y + self.cell_height) / self.window_height as f32) * 2.0;
                 let color = bg_color.to_linear();
 
                 vertices.extend_from_slice(&[
@@ -350,6 +403,9 @@ impl GridRenderer {
         render_pass: &mut wgpu::RenderPass,
     ) -> Result<(), Error>
     {
+        // drop glyphs that are no longer used by any cell
+        self.atlas.trim();
+
         self.viewport.update(
             queue,
             glyphon::Resolution {
@@ -362,7 +418,7 @@ impl GridRenderer {
 
         self.text_renderer
             .prepare(
-                &device,
+                device,
                 queue,
                 &mut self.font_system,
                 &mut self.atlas,
@@ -370,17 +426,11 @@ impl GridRenderer {
                 text_areas,
                 &mut self.swash_cache,
             )
-            .map_err(|e| Error::TextRenderPrepareError(e))?;
+            .map_err(Error::TextRenderPrepareError)?;
         self.text_renderer
             .render(&self.atlas, &self.viewport, render_pass)
-            .map_err(|e| Error::TextRenderError(e))?;
+            .map_err(Error::TextRenderError)?;
         Ok(())
     }
 
-    pub fn cell_width(&self) -> f32 {
-        self.cell_width
-    }
-    pub fn cell_height(&self) -> f32 {
-        self.cell_height
-    }
 }

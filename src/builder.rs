@@ -1,3 +1,8 @@
+//! Window configuration, see [`WindowBuilder`].
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use crate::layer::{Layer, Anchor};
 use crate::KeyboardInteractivity;
 use crate::Error;
@@ -7,8 +12,10 @@ use crate::Error;
 /// `WindowBuilder` follows the builder pattern, allowing ergonomic,
 /// chained configuration of layer-shell parameters before the final
 /// window object is created.
-/// Use `build_cpu()` for a window using cpu rendering and `build_wgpu()`
-/// for a window using gpu rendering.
+/// Use [`init_cpu`](WindowBuilder::init_cpu) for a window using cpu rendering
+/// and [`init_wgpu`](WindowBuilder::init_wgpu) for a window using gpu rendering.
+/// Both return a window implementing ratatui's
+/// [`Backend`](ratatui_core::backend::Backend) trait.
 ///
 /// This builder is designed for configuring:
 /// - Size (width, height)
@@ -18,32 +25,45 @@ use crate::Error;
 /// - Keyboard interactivity mode
 /// - Layer (background, bottom, top, overlay)
 /// - Namespace (for compositor identification)
+/// - Font, font size and transparency
+///
+/// # Sizing
+///
+/// A width or height of `0` lets the compositor decide that dimension. This
+/// is only allowed when the surface is anchored to both opposite edges
+/// (left and right for the width, top and bottom for the height), otherwise
+/// [`Error::InvalidConfiguration`] is returned.
 ///
 /// # Example
 ///
-/// ```ignore
+/// A 30px high bar spanning the top of the screen:
+///
+/// ```no_run
+/// use raclettui::{WindowBuilder, Anchor, Layer};
+///
 /// let window = WindowBuilder::new()
 ///     .set_namespace("my-panel")
-///     .set_width(1920)
 ///     .set_height(30)
 ///     .set_anchor(Anchor::Top)
 ///     .set_anchor(Anchor::Left)
 ///     .set_anchor(Anchor::Right)
 ///     .set_exclusive_zone(30)
-///     .set_layer(Layer::Top);
+///     .set_layer(Layer::Top)
+///     .init_cpu()?;
+/// # Ok::<(), raclettui::Error>(())
 /// ```
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct WindowBuilder {
     /// Namespace used by the compositor to identify the layer surface.
     /// This is typically used for grouping, debugging, or compositor rules.
     pub namespace: String,
 
     /// Desired width of the layer surface in logical pixels.
-    /// A value of `0` typically indicates compositor-defined sizing.
+    /// A value of `0` lets the compositor decide, see [Sizing](#sizing).
     pub width: u32,
 
     /// Desired height of the layer surface in logical pixels.
-    /// A value of `0` typically indicates compositor-defined sizing.
+    /// A value of `0` lets the compositor decide, see [Sizing](#sizing).
     pub height: u32,
 
     /// Anchors defining which edges of the screen the surface
@@ -60,7 +80,7 @@ pub struct WindowBuilder {
     pub exclusive_zone: Option<i32>,
 
     /// Defines how the surface interacts with keyboard focus.
-    /// If `None`, compositor defaults are used.
+    /// If `None`, compositor defaults are used (no keyboard focus).
     pub keyboard_interactivity: Option<KeyboardInteractivity>,
 
     /// The layer in which this surface should be placed.
@@ -69,16 +89,19 @@ pub struct WindowBuilder {
 
     /// Optional edge used for determining exclusive zone behavior.
     /// This should typically correspond to one of the set anchors.
+    /// Requires layer shell version 5 and is ignored otherwise.
     pub exclusive_edge: Option<Anchor>,
 
-    /// Optional font path or will try to load from system
-    pub font_path: Option<&'static str>,
+    /// Optional path to a font file. When `None` the system monospace font is used.
+    pub font_path: Option<PathBuf>,
 
-    /// Font size defaults to 17.
+    /// Font size in pixels, defaults to 17.
     pub font_size: f32,
 
-    /// Window transparency
+    /// Opacity of cell backgrounds, from `0.0` (transparent) to `1.0` (opaque).
     pub bg_alpha: f32,
+
+    /// Opacity of the text, from `0.0` (transparent) to `1.0` (opaque).
     pub fg_alpha: f32,
 }
 
@@ -93,6 +116,8 @@ impl std::default::Default for WindowBuilder {
     /// - No keyboard interactivity override
     /// - Layer set to `Layer::Top`
     /// - No exclusive edge
+    /// - System monospace font at 17px
+    /// - Fully opaque background and text
     fn default() -> Self {
         Self {
             namespace: "".to_string(),
@@ -118,13 +143,13 @@ impl WindowBuilder {
         Self::default()
     }
 
-    /// Sets the desired width of the surface.
+    /// Sets the desired width of the surface in logical pixels.
     pub fn set_width(mut self, width: u32) -> Self {
         self.width = width;
         self
     }
 
-    /// Sets the desired height of the surface.
+    /// Sets the desired height of the surface in logical pixels.
     pub fn set_height(mut self, height: u32) -> Self {
         self.height = height;
         self
@@ -142,7 +167,7 @@ impl WindowBuilder {
     ///
     /// Existing anchors are preserved and the provided anchors are appended.
     pub fn set_anchors(mut self, anchors: Vec<Anchor>) -> Self {
-        self.anchors.extend(anchors.iter());
+        self.anchors.extend(anchors);
         self
     }
 
@@ -156,13 +181,17 @@ impl WindowBuilder {
 
     /// Sets the exclusive zone in logical pixels.
     ///
-    /// This reserves screen space for the surface.
+    /// This reserves screen space for the surface. A value of `-1` asks the
+    /// compositor not to move the surface for other surfaces' exclusive zones.
     pub fn set_exclusive_zone(mut self, zone: i32) -> Self {
         self.exclusive_zone = Some(zone);
         self
     }
 
     /// Sets keyboard interactivity behavior.
+    ///
+    /// Keyboard events are only delivered with
+    /// [`KeyboardInteractivity::Exclusive`] or [`KeyboardInteractivity::OnDemand`].
     pub fn set_keyboard_interactivity(
         mut self,
         keyboard_interactivity: KeyboardInteractivity,
@@ -192,78 +221,87 @@ impl WindowBuilder {
         self
     }
 
-    /// Sets a path to a font
-    pub fn set_font_path(mut self, path: &'static str) -> Self {
-        self.font_path = Some(path);
+    /// Sets the path to a font file (`.ttf` / `.otf`).
+    ///
+    /// The font should be monospaced. When unset, the system monospace font is used.
+    pub fn set_font_path(mut self, path: impl Into<PathBuf>) -> Self {
+        self.font_path = Some(path.into());
         self
     }
 
-    /// Sets font size, default 17.0
+    /// Sets font size in pixels, default 17.0
     pub fn set_font_size(mut self, size: f32) -> Self {
         self.font_size = size;
         self
     }
 
-    /// Sets window transparency
+    /// Sets the opacity of cell backgrounds, clamped to `0.0..=1.0`.
+    ///
+    /// Values below `1.0` let the desktop show through the window.
     pub fn set_bg_alpha(mut self, alpha: f32) -> Self {
-        self.bg_alpha = alpha;
+        self.bg_alpha = alpha.clamp(0.0, 1.0);
         self
     }
 
+    /// Sets the opacity of the text, clamped to `0.0..=1.0`.
     pub fn set_fg_alpha(mut self, alpha: f32) -> Self {
-        self.fg_alpha = alpha;
+        self.fg_alpha = alpha.clamp(0.0, 1.0);
         self
     }
 
-    // loads font from a path into fontdb if provided or tries to default to system
-    pub fn get_font(&self) -> fontdue::Font {
-        if let Some(path) = self.font_path {
-            let bytes = std::fs::read(path)
-                .expect("Failed to read provided font file");
-            fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).unwrap()
-
-        } else {
-
-            let mut font_db = fontdb::Database::new();
-            font_db.load_system_fonts();
-
-            let query = fontdb::Query {
-                // Query for a monospace font
-                families: &[fontdb::Family::Monospace],
-                ..Default::default()
-            };
-            let font_id = font_db
-                .query(&query)
-                .expect("src/builder.rs No monospace font found"); // Find a font that matches the query
-            let font_data = font_db
-                .with_face_data(font_id, |data, _face_index| {
-                    data.to_vec()
-                })
-                .expect("src/builder.rs Failed to load font");
-
-            fontdue::Font::from_bytes(font_data, fontdue::FontSettings::default()).unwrap()
-        }
+    /// All anchors combined into a single bitflag value.
+    pub(crate) fn anchor_flags(&self) -> Anchor {
+        self.anchors.iter().fold(Anchor::empty(), |acc, anchor| acc | *anchor)
     }
 
-    // kinda need to give option to force a font by path.
+    /// Reads the configured font file, or the system monospace font.
+    fn font_data(&self) -> Result<Vec<u8>, Error> {
+        if let Some(path) = &self.font_path {
+            return std::fs::read(path).map_err(Error::IoError);
+        }
+
+        let mut font_db = fontdb::Database::new();
+        font_db.load_system_fonts();
+        let query = fontdb::Query {
+            families: &[fontdb::Family::Monospace],
+            ..Default::default()
+        };
+        let font_id = font_db.query(&query).ok_or(Error::FontLoadingError)?;
+        font_db
+            .with_face_data(font_id, |data, _face_index| data.to_vec())
+            .ok_or(Error::FontLoadingError)
+    }
+
+    /// Loads the font used by the cpu backend.
+    ///
+    /// Uses [`font_path`](Self::font_path) if set, otherwise the system monospace font.
+    pub fn get_font(&self) -> Result<fontdue::Font, Error> {
+        let data = self.font_data()?;
+        fontdue::Font::from_bytes(data, fontdue::FontSettings::default())
+            .map_err(|_| Error::FontLoadingError)
+    }
+
+    /// Creates the font system used by the wgpu backend.
+    ///
+    /// System fonts are always loaded so missing glyphs can fall back to them.
+    /// If [`font_path`](Self::font_path) is set, that font is loaded too and
+    /// used as the monospace family.
     pub fn get_font_system(&self) -> Result<glyphon::FontSystem, Error> {
-        // if let Some(path) = self.font_path {
-        //     let path_buf = std::path::PathBuf::from(path);
-        //     let source = fontdb::Source::File(path_buf);
-        //     let font_system = glyphon::FontSystem::new_with_fonts(std::iter::once(source));
-        //     println!("loaded: {:?}", font_system);
-        //     let db =  font_system.db();
-        //     let query = fontdb::Query {
-        //         families: &[fontdb::Family::Monospace],
-        //         ..Default::default()
-        //     };
-        //     let _font_id = db
-        //         .query(&query)
-        //         .ok_or(Error::FontLoadingError)?;
-        //     Ok(font_system)
-        // } else {
-            let font_system = glyphon::FontSystem::new();
-            Ok(font_system)
-        // }
+        let mut font_system = glyphon::FontSystem::new();
+
+        if let Some(path) = &self.font_path {
+            let data = std::fs::read(path).map_err(Error::IoError)?;
+            let db = font_system.db_mut();
+            let ids = db.load_font_source(fontdb::Source::Binary(Arc::new(data)));
+            let family = ids
+                .first()
+                .and_then(|id| db.face(*id))
+                .and_then(|face| face.families.first())
+                .map(|(name, _)| name.clone())
+                .ok_or(Error::FontLoadingError)?;
+            db.set_monospace_family(family);
+        }
+
+        Ok(font_system)
     }
 }
